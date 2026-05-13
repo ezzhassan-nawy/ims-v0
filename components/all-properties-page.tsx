@@ -1108,12 +1108,16 @@ function ViewPropertyDrawer({
   const [serviceDraft, setServiceDraft] = useState<string[]>([])
   const [carouselState, setCarouselState] = useState<{ imgs: string[]; idx: number; field: "images" | "floorPlans" } | null>(null)
   const [uploadState, setUploadState] = useState<"images" | "floorPlans" | null>(null)
+  const tabsScrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (row) {
       setActiveTab(defaultTab)
       setAmenityDraft([...row.amenities])
       setServiceDraft([...row.services])
+      // Always reset media overlays when a new row is loaded — prevents stale state
+      setUploadState(null)
+      setCarouselState(null)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [row?.propertyId, defaultTab])
@@ -1192,48 +1196,65 @@ function ViewPropertyDrawer({
       <Sheet open={!!row} onOpenChange={(o) => !o && onClose()}>
         <SheetContent
           side="right"
-          className="w-[760px] max-w-[92vw] flex flex-col p-0 gap-0 overflow-hidden"
+          className="w-[920px] max-w-[95vw] flex flex-col p-0 gap-0 overflow-hidden"
         >
           {/* ── Header */}
-          <div className="shrink-0 border-b border-border bg-card px-6 py-5">
-            <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                  <h2 className="text-base font-semibold">{row.unitCode}</h2>
+          <div className="shrink-0 border-b border-border bg-card px-6 pt-5 pb-4">
+            <div className="flex items-start gap-6">
+              {/* Left: all identity info */}
+              <div className="flex-1 min-w-0 space-y-2.5">
+                {/* Row 1: unit code */}
+                <h2 className="text-lg font-bold tracking-tight leading-none">{row.unitCode}</h2>
+
+                {/* Row 2: status badges */}
+                <div className="flex items-center gap-1.5 flex-wrap">
                   <StoryBadge value={row.availability} />
                   <StoryBadge value={row.listingStatus} />
+                  <StoryBadge value={row.saleType} />
+                  <StoryBadge value={row.entryType} />
+                  <Badge variant="outline" className={cn("text-xs border font-medium", tagColor(row.propertyType))}>
+                    {row.propertyType}
+                  </Badge>
                 </div>
-                <div className="flex items-center gap-1.5 text-sm flex-wrap mb-2">
-                  <span className="font-medium text-foreground">{row.developer.name}</span>
-                  <span className="text-muted-foreground">·</span>
+
+                {/* Row 3: developer · project · phase */}
+                <div className="flex items-center gap-1.5 text-sm flex-wrap">
+                  <span className="font-semibold text-foreground">{row.developer.name}</span>
+                  <span className="text-muted-foreground/50">·</span>
                   <span className="text-muted-foreground">{row.project.name}</span>
                   {row.phase && (
                     <>
-                      <span className="text-muted-foreground">·</span>
+                      <span className="text-muted-foreground/50">·</span>
                       <span className="text-muted-foreground">{row.phase.name}</span>
                     </>
                   )}
                 </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Badge variant="outline" className={cn("text-xs border", tagColor(row.propertyType))}>
-                    {row.propertyType}
-                  </Badge>
-                  <StoryBadge value={row.saleType} />
-                  {row.bedrooms !== null && (
-                    <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{row.bedrooms} BR</span>
-                  )}
-                  <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-                    {row.grossBua.toLocaleString()} m² GBA
+
+                {/* Row 4: IDs */}
+                <div className="flex items-center gap-4 flex-wrap">
+                  <span className="flex items-center gap-1.5 text-xs">
+                    <span className="text-muted-foreground">Property ID</span>
+                    <CopyableText value={row.propertyId} />
                   </span>
-                  <StoryBadge value={row.deliveryType} />
+                  {row.detailedPropertyId && (
+                    <span className="flex items-center gap-1.5 text-xs">
+                      <span className="text-muted-foreground">Detailed ID</span>
+                      <CopyableText value={row.detailedPropertyId} muted />
+                    </span>
+                  )}
                 </div>
               </div>
-              <div className="text-right flex-shrink-0">
+
+              {/* Right: price block */}
+              <div className="flex-shrink-0 text-right">
                 {row.price ? (
                   <>
-                    <div className="text-xl font-bold tabular-nums">{row.price.toLocaleString()} EGP</div>
+                    <div className="text-2xl font-bold tabular-nums leading-tight">
+                      {row.price.toLocaleString()}
+                      <span className="text-base font-medium text-muted-foreground ml-1">EGP</span>
+                    </div>
                     {pricePerM2 && (
-                      <div className="text-xs text-muted-foreground tabular-nums">
+                      <div className="text-xs text-muted-foreground tabular-nums mt-0.5">
                         {pricePerM2.toLocaleString()} EGP/m²
                       </div>
                     )}
@@ -1242,30 +1263,50 @@ function ViewPropertyDrawer({
                   <div className="text-sm font-medium text-red-500">No price set</div>
                 )}
                 {row.deliveryDate && (
-                  <div className="text-xs text-muted-foreground mt-1">Delivery: {row.deliveryDate}</div>
+                  <div className="text-[11px] text-muted-foreground mt-1.5 bg-muted px-2 py-0.5 rounded-full inline-block">
+                    Delivery: {row.deliveryDate}
+                  </div>
                 )}
               </div>
             </div>
           </div>
 
-          {/* ── Tabs bar */}
-          <div className="shrink-0 border-b border-border bg-card overflow-x-auto">
-            <div className="flex min-w-max px-6">
-              {TABS.map(({ id, label }) => (
-                <button
-                  key={id}
-                  onClick={() => setActiveTab(id)}
-                  className={cn(
-                    "px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap",
-                    activeTab === id
-                      ? "border-primary text-primary"
-                      : "border-transparent text-muted-foreground hover:text-foreground hover:border-border",
-                  )}
-                >
-                  {label}
-                </button>
-              ))}
+          {/* ── Tabs bar with scroll arrows */}
+          <div className="shrink-0 border-b border-border bg-card flex items-center">
+            <button
+              onClick={() => tabsScrollRef.current?.scrollBy({ left: -180, behavior: "smooth" })}
+              className="flex-shrink-0 h-full px-2 flex items-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors border-r border-border"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </button>
+            <div
+              ref={tabsScrollRef}
+              className="flex-1 overflow-x-auto"
+              style={{ scrollbarWidth: "none" }}
+            >
+              <div className="flex min-w-max">
+                {TABS.map(({ id, label }) => (
+                  <button
+                    key={id}
+                    onClick={() => setActiveTab(id)}
+                    className={cn(
+                      "px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap",
+                      activeTab === id
+                        ? "border-primary text-primary"
+                        : "border-transparent text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
+            <button
+              onClick={() => tabsScrollRef.current?.scrollBy({ left: 180, behavior: "smooth" })}
+              className="flex-shrink-0 h-full px-2 flex items-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors border-l border-border"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
           </div>
 
           {/* ── Tab content */}
