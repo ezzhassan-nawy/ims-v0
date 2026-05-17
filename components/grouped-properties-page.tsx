@@ -20,6 +20,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { EmbeddedPropertyTable, createRows, type ColId } from "@/components/all-properties-page"
 
 export interface SharedFilterState {
   searchQuery: string
@@ -229,9 +230,59 @@ function area(value?: number) {
   return value ? `${value} m²` : "N/A"
 }
 
+function EmptyCell() {
+  return <span className="text-muted-foreground">—</span>
+}
+
+function DetailStatusBadge({ value }: { value: "Available" | "Sold" }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border",
+        value === "Available"
+          ? "bg-green-100 text-green-700 border-green-200"
+          : "bg-red-100 text-red-700 border-red-200",
+      )}
+    >
+      {value}
+    </span>
+  )
+}
+
+function OfferingBadge({ value }: { value: string }) {
+  const cls: Record<string, string> = {
+    Primary: "bg-blue-100 text-blue-700 border-blue-200",
+    Resale: "bg-purple-100 text-purple-700 border-purple-200",
+    "Nawy Now": "bg-teal-100 text-teal-700 border-teal-200",
+  }
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border",
+        cls[value] ?? "bg-gray-100 text-gray-700 border-gray-200",
+      )}
+    >
+      {value}
+    </span>
+  )
+}
+
+function BoolCell({ value }: { value: boolean }) {
+  return value ? (
+    <span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-green-100">
+      <span className="text-green-600 text-[10px] font-bold">✓</span>
+    </span>
+  ) : (
+    <span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-red-100">
+      <span className="text-red-600 text-[10px] font-bold">✗</span>
+    </span>
+  )
+}
+
 export function GroupedPropertiesView({ filters }: { filters: SharedFilterState }) {
   const [groups] = useState<GroupedProperty[]>(() => makeGroups())
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set([groups[0]?.id].filter(Boolean)))
+  const allRows = useMemo(() => createRows(), [])
 
   const filteredGroups = useMemo(() => {
     const query = filters.searchQuery.toLowerCase()
@@ -258,11 +309,16 @@ export function GroupedPropertiesView({ filters }: { filters: SharedFilterState 
     })
   }
 
+  const GROUPED_HIDDEN_COLS: ColId[] = [
+    "propertyId", "propertyMetadataId", "developer", "project", "phase",
+    "entryType", "saleType", "listingStatus", "propertyCategory", "propertyType", "propertySubType",
+  ]
+
   return (
     <div className="space-y-4">
 
         <div className="space-y-4">
-          {filteredGroups.map((group) => {
+          {filteredGroups.map((group, groupIndex) => {
             const isExpanded = expanded.has(group.id)
             return (
               <div key={group.id} className="rounded-lg border border-border bg-card p-6 shadow-sm">
@@ -338,73 +394,14 @@ export function GroupedPropertiesView({ filters }: { filters: SharedFilterState 
 
                 {isExpanded && (
                   <div className="mt-6 border-t border-border pt-5">
-                    <h3 className="mb-4 text-sm font-semibold">Detailed Properties ({group.details.length} units)</h3>
-                    <div className="overflow-x-auto rounded-lg border border-border">
-                      <table className="w-full min-w-[1500px] text-left text-xs">
-                        <thead className="bg-secondary/50 text-foreground">
-                          <tr>
-                            {[
-                              "ID",
-                              "Unit Code",
-                              "Unit Number",
-                              "Unit Model",
-                              "Net BUA (m²)",
-                              "Gross BUA (m²)",
-                              "Floor",
-                              "Price",
-                              "Payment Plan",
-                              "Duration",
-                              "Downpayment %",
-                              "Status",
-                              "Offering",
-                              "Financing",
-                              "Nawy Now",
-                              "Garden Area (m²)",
-                              "Roof Area (m²)",
-                              "Roof Annex (m²)",
-                              "Land Area (m²)",
-                              "Terrace Area (m²)",
-                            ].map((header) => (
-                              <th key={header} className="whitespace-nowrap border-b border-border px-4 py-3 font-semibold">
-                                {header}
-                              </th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {group.details.map((detail) => (
-                            <tr key={detail.id} className="border-b border-border last:border-b-0">
-                              <td className="px-4 py-3 font-mono">{detail.id}</td>
-                              <td className="px-4 py-3 font-mono">{detail.unitCode}</td>
-                              <td className="px-4 py-3">{detail.unitNumber}</td>
-                              <td className="px-4 py-3">{detail.unitModel}</td>
-                              <td className="px-4 py-3">{area(detail.netBua)}</td>
-                              <td className="px-4 py-3">{area(detail.grossBua)}</td>
-                              <td className="px-4 py-3">{detail.floor}</td>
-                              <td className="px-4 py-3">{detail.price.toLocaleString()}</td>
-                              <td className="px-4 py-3">{detail.paymentPlan}</td>
-                              <td className="px-4 py-3">{detail.duration}</td>
-                              <td className="px-4 py-3">{detail.downpayment}%</td>
-                              <td className="px-4 py-3">
-                                <Badge variant="outline" className={detail.status === "Available" ? "border-green-200 bg-green-50 text-green-700" : "border-red-200 bg-red-50 text-red-700"}>
-                                  {detail.status}
-                                </Badge>
-                              </td>
-                              <td className="px-4 py-3">
-                                <StatusBadge value={detail.offering} />
-                              </td>
-                              <td className="px-4 py-3">{detail.financing ? "Yes" : "No"}</td>
-                              <td className="px-4 py-3">{detail.nawyNow ? "Yes" : "No"}</td>
-                              <td className="px-4 py-3">{area(detail.gardenArea)}</td>
-                              <td className="px-4 py-3">{area(detail.roofArea)}</td>
-                              <td className="px-4 py-3">{area(detail.roofAnnex)}</td>
-                              <td className="px-4 py-3">{area(detail.landArea)}</td>
-                              <td className="px-4 py-3">{area(detail.terraceArea)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                    <div className="mb-4 flex items-baseline gap-2">
+                      <h3 className="text-sm font-semibold">Detailed Properties</h3>
+                      <span className="text-xs text-muted-foreground">({group.details.length} units)</span>
                     </div>
+                    <EmbeddedPropertyTable
+                      rows={allRows.slice(groupIndex * 3, groupIndex * 3 + group.details.length)}
+                      hiddenColumns={GROUPED_HIDDEN_COLS}
+                    />
                   </div>
                 )}
               </div>

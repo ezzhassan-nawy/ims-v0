@@ -81,7 +81,7 @@ type ListingStatus = "Active" | "Hidden"
 type SaleType = "Launch" | "Primary" | "Resale" | "Nawy Now" | "Rental" | "Financing"
 type EntryType = "Automatic" | "Manual"
 
-interface PropertyRow {
+export interface PropertyRow {
   propertyId: string
   propertyMetadataId: string
   detailedPropertyId: string | null
@@ -143,9 +143,9 @@ interface PropertyRow {
 }
 
 type VirtualColId = "pricePerMeter" | "paymentOptions"
-type ColId = keyof PropertyRow | VirtualColId
+export type ColId = keyof PropertyRow | VirtualColId
 
-interface ColumnDef {
+export interface ColumnDef {
   id: ColId
   label: string
   width: number
@@ -164,7 +164,7 @@ interface FilterGroup {
 }
 
 // ── Column definitions ─────────────────────────────────────────────────────────
-const COLUMNS: ColumnDef[] = [
+export const COLUMNS: ColumnDef[] = [
   { id: "propertyId", label: "Property ID", width: 150 },
   { id: "propertyMetadataId", label: "Property Metadata ID", width: 185 },
   { id: "detailedPropertyId", label: "Detailed Property ID", width: 170 },
@@ -317,7 +317,7 @@ function tagColor(value: string): string {
 }
 
 // ── Mock data ──────────────────────────────────────────────────────────────────
-function createRows(): PropertyRow[] {
+export function createRows(): PropertyRow[] {
   return Array.from({ length: 3 }).flatMap((_, bi) =>
     initialUnits.map((unit, ui) => mapUnitToProperty(unit, bi, ui)),
   )
@@ -2581,6 +2581,300 @@ function ViewPropertyDrawer({
 
 interface FilterProps extends SharedFilterState {
   onClearFilters: () => void
+}
+
+// ── EmbeddedPropertyTable — same table used inside grouped property cards ──────
+export function EmbeddedPropertyTable({
+  rows: initialRows,
+  hiddenColumns,
+}: {
+  rows: PropertyRow[]
+  hiddenColumns: ColId[]
+}) {
+  const [rows, setRows] = useState<PropertyRow[]>(initialRows)
+  const [editingPrice, setEditingPrice] = useState<string | null>(null)
+  const [priceDraft, setPriceDraft] = useState("")
+  const [viewDrawer, setViewDrawer] = useState<{ propertyId: string; tab: string } | null>(null)
+  const [drawer, setDrawer] = useState<{ type: "prices" | "plans" | "offers"; row: PropertyRow } | null>(null)
+
+  const updateRow = (id: string, patch: Partial<PropertyRow>) =>
+    setRows((prev) => prev.map((r) => (r.propertyId === id ? { ...r, ...patch } : r)))
+
+  const hiddenSet = new Set(hiddenColumns)
+  const visibleCols = useMemo(() => {
+    const cols = COLUMNS.filter((c) => !hiddenSet.has(c.id))
+    // Place unitCode immediately after detailedPropertyId
+    const dpIdx = cols.findIndex((c) => c.id === "detailedPropertyId")
+    const ucIdx = cols.findIndex((c) => c.id === "unitCode")
+    if (dpIdx !== -1 && ucIdx !== -1 && ucIdx !== dpIdx + 1) {
+      const [ucCol] = cols.splice(ucIdx, 1)
+      cols.splice(dpIdx + 1, 0, ucCol)
+    }
+    return cols
+  }, [hiddenColumns])
+
+  const viewDrawerRow = viewDrawer ? rows.find((r) => r.propertyId === viewDrawer.propertyId) ?? null : null
+
+  // Cell renderer — identical logic to DetailedPropertiesView.renderCell
+  const renderCell = (row: PropertyRow, column: ColumnDef): React.ReactNode => {
+    const nil = (v: React.ReactNode) => v ?? <EmptyValue />
+    switch (column.id) {
+      case "propertyId":
+        return (
+          <span className="inline-flex items-center gap-1 group/pid">
+            <a href={`/properties/${row.propertyId}`} target="_blank" rel="noopener noreferrer"
+               className="font-mono text-xs font-medium text-primary hover:underline underline-offset-2"
+               onClick={(e) => e.stopPropagation()}>
+              {row.propertyId}
+            </a>
+            <CopyBtn value={row.propertyId} className="opacity-0 group-hover/pid:opacity-100 transition-opacity" />
+          </span>
+        )
+      case "propertyMetadataId":
+        return <span className="font-mono text-xs"><CopyableText value={row.propertyMetadataId} /></span>
+      case "detailedPropertyId":
+        return <span className="font-mono text-xs"><CopyableText value={row.detailedPropertyId} /></span>
+      case "entryType":
+        return <StoryBadge value={row.entryType} />
+      case "developer":
+        return (
+          <a href={row.developer.url} target="_blank" rel="noreferrer"
+             className="inline-flex items-center gap-2 hover:text-primary min-w-0 group/devlink">
+            <span className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10 text-[10px] font-bold text-primary flex-shrink-0">
+              {row.developer.logo}
+            </span>
+            <div className="min-w-0">
+              <div className="truncate text-sm font-medium underline decoration-transparent group-hover/devlink:decoration-current transition-all">{row.developer.name}</div>
+              <div className="font-mono text-xs"><CopyableText value={row.developer.id} muted /></div>
+            </div>
+          </a>
+        )
+      case "project":
+        return (
+          <div className="min-w-0">
+            <a href={row.project.url} target="_blank" rel="noreferrer"
+               className="truncate font-medium underline decoration-transparent hover:decoration-current transition-all text-sm">
+              {row.project.name}
+            </a>
+            <div className="font-mono text-xs"><CopyableText value={row.project.id} muted /></div>
+          </div>
+        )
+      case "phase":
+        return row.phase ? (
+          <div className="min-w-0">
+            <a href={row.phase.url} target="_blank" rel="noreferrer"
+               className="truncate font-medium underline decoration-transparent hover:decoration-current transition-all text-sm">
+              {row.phase.name}
+            </a>
+            <div className="font-mono text-xs"><CopyableText value={row.phase.id} muted /></div>
+          </div>
+        ) : <EmptyValue />
+      case "saleType":
+        return <StoryBadge value={row.saleType} />
+      case "availability":
+        return (
+          <StoryBadge value={row.availability} options={availabilityOptions}
+            onChange={(v) => updateRow(row.propertyId, { availability: v as Availability })} />
+        )
+      case "listingStatus":
+        return (
+          <StoryBadge value={row.listingStatus} options={listingStatusOptions}
+            onChange={(v) => updateRow(row.propertyId, { listingStatus: v as ListingStatus })} />
+        )
+      case "unitCode":
+        return <span className="font-mono text-xs"><CopyableText value={row.unitCode} /></span>
+      case "propertyCategory":
+        return <TagBadge value={row.propertyCategory} />
+      case "propertyType":
+        return <TagBadge value={row.propertyType} />
+      case "propertySubType":
+        return <TagBadge value={row.propertySubType} />
+      case "finishingType":
+        return <TagBadge value={row.finishingType} />
+      case "deliveryType":
+        return <TagBadge value={row.deliveryType} />
+      case "unitView":
+        return <TagBadge value={row.unitView} />
+      case "unitOrientation":
+        return <TagBadge value={row.unitOrientation} />
+      case "amenities":
+        return (
+          <AmenitiesCell values={row.amenities} allOptions={amenitiesPool} type="amenities"
+            onUpdate={(vals) => updateRow(row.propertyId, { amenities: vals })}
+            onViewInDrawer={() => setViewDrawer({ propertyId: row.propertyId, tab: "amenities" })} />
+        )
+      case "services":
+        return (
+          <AmenitiesCell values={row.services} allOptions={servicesPool} type="services"
+            onUpdate={(vals) => updateRow(row.propertyId, { services: vals })}
+            onViewInDrawer={() => setViewDrawer({ propertyId: row.propertyId, tab: "amenities" })} />
+        )
+      case "grossBua": case "netBua": case "gardenArea": case "terraceArea": case "landArea":
+      case "storageArea": case "openRoofArea": case "roofAnnexArea": case "outdoorArea": case "basementArea":
+        return nil(formatArea(row[column.id] as number | null))
+      case "bedrooms": case "bathrooms": case "floorNumber": case "parkingSlots": case "additionalParkingSlots":
+        return nil(row[column.id] as number | null)
+      case "storagePrice": case "outdoorPrice":
+        return nil(formatPrice(row[column.id] as number | null))
+      case "parking": case "storageIncluded": case "serviced": case "branded":
+        return <BooleanMark value={Boolean(row[column.id])} />
+      case "finishingLevel":
+        return row.finishingType === "Furnished" ? nil(row.finishingLevel) : <EmptyValue />
+      case "price":
+        if (editingPrice === row.propertyId)
+          return (
+            <Input value={priceDraft} onChange={(e) => setPriceDraft(e.target.value)}
+              onBlur={() => { updateRow(row.propertyId, { price: Number(priceDraft.replaceAll(",", "")) || 0 }); setEditingPrice(null) }}
+              onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") setEditingPrice(null) }}
+              className="h-7 text-right text-xs tabular-nums" autoFocus />
+          )
+        return (
+          <button className={cn("font-medium hover:text-primary tabular-nums text-right w-full block", !row.price && "text-red-600")}
+            onClick={() => { setEditingPrice(row.propertyId); setPriceDraft(String(row.price ?? 0)) }}>
+            {formatPrice(row.price) ?? "0 EGP"}
+          </button>
+        )
+      case "pricePerMeter":
+        return row.price && row.netBua
+          ? <span className="tabular-nums text-right block">{Math.round(row.price / row.netBua).toLocaleString()} EGP/m²</span>
+          : <EmptyValue />
+      case "paymentOptions":
+        return (
+          <div className="flex items-center gap-1.5 w-full min-w-0">
+            <div className="flex items-center gap-1 flex-1 min-w-0 overflow-hidden flex-nowrap">
+              {row.priceRecords.length > 1 && (
+                <button onClick={() => setDrawer({ type: "prices", row })} className="flex-shrink-0">
+                  <Badge variant="outline" className="text-xs bg-white border-border text-gray-700 cursor-pointer hover:bg-muted transition-colors font-medium">
+                    {row.priceRecords.length} prices
+                  </Badge>
+                </button>
+              )}
+              <button onClick={() => setDrawer({ type: "plans", row })} className="flex-shrink-0">
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "text-xs cursor-pointer transition-colors font-medium",
+                    row.paymentPlans === 0
+                      ? "border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+                      : "bg-white border-border text-gray-700 hover:bg-muted",
+                  )}
+                >
+                  {row.paymentPlans} plan{row.paymentPlans !== 1 ? "s" : ""}
+                </Badge>
+              </button>
+              {row.offers > 0 && (
+                <button onClick={() => setDrawer({ type: "offers", row })} className="flex-shrink-0">
+                  <Badge variant="outline" className="text-xs border-orange-200 bg-orange-50 text-orange-700 cursor-pointer hover:bg-orange-100 transition-colors font-medium">
+                    {row.offers} offer{row.offers !== 1 ? "s" : ""}
+                  </Badge>
+                </button>
+              )}
+            </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setViewDrawer({ propertyId: row.propertyId, tab: "payment-plans" })}
+                  className="flex-shrink-0 h-6 w-6 rounded border border-border bg-white hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <Eye className="h-3 w-3" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>View payment options</TooltipContent>
+            </Tooltip>
+          </div>
+        )
+      case "floorPlans":
+        return <MediaCell images={row.floorPlans} onUpdate={(imgs) => updateRow(row.propertyId, { floorPlans: imgs })} />
+      case "images":
+        return <MediaCell images={row.images} onUpdate={(imgs) => updateRow(row.propertyId, { images: imgs })} />
+      case "createdAt":
+        return <span className="text-muted-foreground text-xs tabular-nums whitespace-nowrap">{formatTimestamp(row.createdAt)}</span>
+      case "availabilityUpdatedAt":
+        return <span className="text-muted-foreground text-xs tabular-nums whitespace-nowrap">{formatTimestamp(row.availabilityUpdatedAt)}</span>
+      case "lastUpdated":
+        return <span className="text-muted-foreground text-xs tabular-nums whitespace-nowrap">{formatTimestamp(row.lastUpdated)}</span>
+      default:
+        return nil(row[column.id as keyof PropertyRow] as React.ReactNode)
+    }
+  }
+
+  return (
+    <>
+      <div className="overflow-hidden rounded-xl border border-border bg-card">
+        <div className="overflow-x-auto" style={{ maxHeight: 380 }}>
+          <div className="min-w-max">
+            {/* Header row */}
+            <div className="sticky top-0 z-20 flex border-b border-border bg-muted/80 backdrop-blur-sm">
+              {visibleCols.map((col) => (
+                <div
+                  key={col.id}
+                  className={cn(
+                    "flex items-center border-r border-border px-3 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap shrink-0",
+                    col.align === "right" && "justify-end",
+                    col.align === "center" && "justify-center",
+                  )}
+                  style={{ width: col.width }}
+                >
+                  {col.label}
+                </div>
+              ))}
+              {/* Actions header */}
+              <div className="sticky right-0 z-10 w-12 shrink-0 border-l border-border bg-muted/80" />
+            </div>
+
+            {/* Body rows */}
+            {rows.map((row) => (
+              <div
+                key={row.propertyId}
+                className="group/row flex border-b border-border last:border-b-0 bg-card hover:bg-muted/40 transition-colors"
+                onClick={() => setViewDrawer({ propertyId: row.propertyId, tab: "unit-details" })}
+              >
+                {visibleCols.map((col) => (
+                  <div
+                    key={col.id}
+                    className={cn(
+                      "flex items-center border-r border-border px-3 py-2 text-sm shrink-0",
+                      col.align === "right" && "justify-end text-right",
+                      col.align === "center" && "justify-center text-center",
+                    )}
+                    style={{ width: col.width }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {renderCell(row, col)}
+                  </div>
+                ))}
+                {/* Sticky right action */}
+                <div className="sticky right-0 z-10 flex w-12 shrink-0 items-center justify-center border-l border-border bg-card group-hover/row:bg-muted/40 transition-colors">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setViewDrawer({ propertyId: row.propertyId, tab: "unit-details" }) }}
+                        className="h-7 w-7 rounded border border-border bg-white hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>View details</TooltipContent>
+                  </Tooltip>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* View property drawer */}
+      <ViewPropertyDrawer
+        row={viewDrawerRow}
+        defaultTab={viewDrawer?.tab ?? "unit-details"}
+        onClose={() => setViewDrawer(null)}
+        onUpdateRow={updateRow}
+      />
+
+      {/* Mini drawers */}
+      <PropertyDrawer drawer={drawer} onClose={() => setDrawer(null)} />
+    </>
+  )
 }
 
 // ── Main view ──────────────────────────────────────────────────────────────────
