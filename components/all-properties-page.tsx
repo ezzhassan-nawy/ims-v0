@@ -2243,39 +2243,38 @@ function ViewPropertyDrawer({
                   { id: "ENT-2026-00620", ts: "19 Apr 2026, 13:47", createdBy: "Omar Fathi", status: "Unmodified" as const },
                   { id: "ENT-2026-00598", ts: "14 Apr 2026, 09:20", createdBy: "Ahmed Nour", status: "New" as const },
                 ].map((entry) => {
-                  const statusStyle: Record<string, { card: string; badge: string }> = {
-                    New:        { card: "border-emerald-200 bg-emerald-50/40 dark:bg-emerald-950/20 dark:border-emerald-800",   badge: "bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400" },
-                    Modified:   { card: "border-amber-200 bg-amber-50/40 dark:bg-amber-950/20 dark:border-amber-800",           badge: "bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-900/40 dark:text-amber-400" },
-                    Unmodified: { card: "border-border bg-card",                                                                 badge: "bg-muted text-muted-foreground border border-border" },
-                    Missing:    { card: "border-red-200 bg-red-50/40 dark:bg-red-950/20 dark:border-red-800",                   badge: "bg-red-100 text-red-600 border border-red-200 dark:bg-red-900/40 dark:text-red-400" },
-                    Returned:   { card: "border-blue-200 bg-blue-50/40 dark:bg-blue-950/20 dark:border-blue-800",               badge: "bg-blue-100 text-blue-600 border border-blue-200 dark:bg-blue-900/40 dark:text-blue-400" },
+                  const statusBadge: Record<string, string> = {
+                    New:        "bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400",
+                    Modified:   "bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-900/40 dark:text-amber-400",
+                    Unmodified: "bg-muted text-muted-foreground border border-border",
+                    Missing:    "bg-red-100 text-red-600 border border-red-200 dark:bg-red-900/40 dark:text-red-400",
+                    Returned:   "bg-blue-100 text-blue-600 border border-blue-200 dark:bg-blue-900/40 dark:text-blue-400",
                   }
-                  const s = statusStyle[entry.status]
                   return (
-                    <div key={entry.id} className={cn("rounded-xl border px-4 py-3 flex items-center gap-3", s.card)}>
-                      {/* Entry ID — clickable */}
+                    <div key={entry.id} className="rounded-xl border border-border bg-card px-4 py-3 flex items-center gap-3">
+                      {/* Entry ID — fixed width so all IDs align */}
                       <a
                         href={`/entries/${entry.id}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="font-mono text-xs font-semibold text-primary hover:underline underline-offset-2 flex-shrink-0 w-36"
+                        className="font-mono text-xs font-semibold text-primary hover:underline underline-offset-2 shrink-0 w-36"
                         onClick={(e) => e.stopPropagation()}
                       >
                         {entry.id}
                       </a>
-                      {/* Status badge */}
-                      <span className={cn("text-[11px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0", s.badge)}>
+                      {/* Status badge — fixed width so badges align */}
+                      <span className={cn("text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0 w-24 text-center", statusBadge[entry.status])}>
                         {entry.status}
                       </span>
-                      {/* Meta */}
-                      <div className="flex-1 min-w-0 flex items-center gap-3 text-xs text-muted-foreground ml-1">
-                        <span className="flex items-center gap-1 flex-shrink-0">
-                          <User className="h-3 w-3" />{entry.createdBy}
-                        </span>
-                        <span className="flex items-center gap-1 flex-shrink-0">
-                          <Clock className="h-3 w-3" />{entry.ts}
-                        </span>
-                      </div>
+                      {/* User — fills remaining space */}
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground flex-1 min-w-0">
+                        <User className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{entry.createdBy}</span>
+                      </span>
+                      {/* Timestamp — pushed to the right */}
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0 ml-auto">
+                        <Clock className="h-3 w-3" />{entry.ts}
+                      </span>
                     </div>
                   )
                 })}
@@ -4285,11 +4284,11 @@ export function AllPropertiesPage() {
             <div className="rounded-lg border border-border bg-card p-3 space-y-2.5">
               {/* Row 1: Search + primary filters */}
               <div className="flex flex-wrap items-center gap-2">
-                {/* Search — grows to fill remaining space */}
-                <div className="relative flex-1 min-w-[200px]">
+                {/* Search — sized to fit placeholder */}
+                <div className="relative shrink-0">
                   <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                   <Input
-                    className="h-8 pl-8 pr-7 w-full text-sm"
+                    className="h-8 pl-8 pr-7 w-[320px] text-sm"
                     placeholder="Search by Property ID, Detailed Property ID, Unit Code"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
