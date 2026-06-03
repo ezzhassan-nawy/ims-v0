@@ -901,6 +901,7 @@ interface CaptureProject {
   subAreaName: string
   areaKm2: number
   polygonUploaded: boolean
+  createdAt: string
   bbox: { minLat: number; maxLat: number; minLng: number; maxLng: number }
 }
 
@@ -928,17 +929,25 @@ const CAPTURE_PROJECTS: CaptureProject[] = (() => {
   const seen = new Map<string, CaptureProject>()
   for (const img of SATELLITE_IMAGES) {
     if (!seen.has(img.projectId)) {
+      // Established projects — created well over 6 months ago (deterministic 2022–2023)
+      const ph = img.projectId.split("").reduce((a, c) => a + c.charCodeAt(0), 0)
+      const createdAt = `${2022 + (ph % 2)}-${String((ph % 12) + 1).padStart(2, "0")}-15`
       seen.set(img.projectId, {
         id: img.projectId, name: img.projectName, developer: img.developer.name,
         areaName: img.areaName, subAreaName: img.subAreaName, areaKm2: img.totalAreaKm2,
-        polygonUploaded: true,
+        polygonUploaded: true, createdAt,
         bbox: { minLat: img.metadata.bboxMinLat, maxLat: img.metadata.bboxMaxLat, minLng: img.metadata.bboxMinLng, maxLng: img.metadata.bboxMaxLng },
       })
     }
   }
   const arr = Array.from(seen.values())
-  arr.push({ id: "PJ-2100", name: "Cairo Gate", developer: "Emaar Misr", areaName: "Sheikh Zayed", subAreaName: "Beverly Hills", areaKm2: 3.50, polygonUploaded: false, bbox: { minLat: 30.02, maxLat: 30.06, minLng: 31.00, maxLng: 31.05 } })
-  arr.push({ id: "PJ-2205", name: "SODIC West Phase 7", developer: "SODIC", areaName: "6th of October", subAreaName: "Golf District", areaKm2: 4.10, polygonUploaded: false, bbox: { minLat: 29.95, maxLat: 29.99, minLng: 30.90, maxLng: 30.96 } })
+  // No-polygon projects
+  arr.push({ id: "PJ-2100", name: "Cairo Gate", developer: "Emaar Misr", areaName: "Sheikh Zayed", subAreaName: "Beverly Hills", areaKm2: 3.50, polygonUploaded: false, createdAt: "2023-06-01", bbox: { minLat: 30.02, maxLat: 30.06, minLng: 31.00, maxLng: 31.05 } })
+  arr.push({ id: "PJ-2205", name: "SODIC West Phase 7", developer: "SODIC", areaName: "6th of October", subAreaName: "Golf District", areaKm2: 4.10, polygonUploaded: false, createdAt: "2023-11-20", bbox: { minLat: 29.95, maxLat: 29.99, minLng: 30.90, maxLng: 30.96 } })
+  // Recently created projects (polygon uploaded, no captures yet) — < 6 months
+  arr.push({ id: "PJ-2310", name: "Mostakbal City – Green Avenue", developer: "City Edge", areaName: "New Cairo", subAreaName: "Mostakbal City", areaKm2: 5.60, polygonUploaded: true, createdAt: "2025-03-05", bbox: { minLat: 30.10, maxLat: 30.15, minLng: 31.70, maxLng: 31.77 } })
+  arr.push({ id: "PJ-2311", name: "Palm Hills Katameya", developer: "Palm Hills Developments", areaName: "New Cairo", subAreaName: "Katameya Heights", areaKm2: 4.20, polygonUploaded: true, createdAt: "2025-02-14", bbox: { minLat: 30.03, maxLat: 30.07, minLng: 31.48, maxLng: 31.54 } })
+  arr.push({ id: "PJ-2312", name: "Tatweer Misr – Koun", developer: "Tatweer Misr", areaName: "Sahel", subAreaName: "North Bay", areaKm2: 3.10, polygonUploaded: true, createdAt: "2025-01-20", bbox: { minLat: 31.08, maxLat: 31.12, minLng: 28.80, maxLng: 28.85 } })
   return arr.sort((a, b) => a.name.localeCompare(b.name))
 })()
 
@@ -977,14 +986,20 @@ function CaptureDialog({
   const egpHigh = Math.round(usdHigh * 50)
   const usd = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-  // Previously captured (same project, same-or-higher quality, last 30 days)
-  const recent = project
-    ? SATELLITE_IMAGES.filter((r) =>
-        r.projectId === project.id &&
-        qualityRank(r.quality) >= qualityRank(quality) &&
-        new Date(r.capturedAt.split(" ")[0]).getTime() >= DATASET_NOW - 30 * 864e5,
-      )
+  // Previously captured for this project at same-or-higher quality
+  const prior = project
+    ? SATELLITE_IMAGES
+        .filter((r) => r.projectId === project.id && qualityRank(r.quality) >= qualityRank(quality))
+        .sort((a, b) => b.capturedAt.localeCompare(a.capturedAt))
     : []
+  const isRecent = (r: SatelliteImage) =>
+    new Date(r.capturedAt.split(" ")[0]).getTime() >= DATASET_NOW - 30 * 864e5
+  const recent = prior.filter(isRecent)
+  const hasRecent = recent.length > 0
+
+  // Recently created project (< 6 months) — capture typically not needed yet
+  const recentlyCreated = !!project &&
+    new Date(project.createdAt).getTime() >= DATASET_NOW - 182 * 864e5
 
   // Map palette
   const isCoastal = project ? (project.areaName.includes("Sahel") || project.areaName.includes("Sokhna")) : false
@@ -1014,22 +1029,41 @@ function CaptureDialog({
             <Select value={projectId} onValueChange={setProjectId}>
               <SelectTrigger className="h-9 text-sm w-full"><SelectValue placeholder="Select a project…" /></SelectTrigger>
               <SelectContent>
-                {CAPTURE_PROJECTS.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    <span className="flex items-center gap-2">
-                      {p.name}
-                      <span className="text-muted-foreground text-xs">· {p.developer}</span>
-                      {!p.polygonUploaded && <span className="text-red-500 text-[10px]">no polygon</span>}
-                    </span>
-                  </SelectItem>
-                ))}
+                {CAPTURE_PROJECTS.map((p) => {
+                  const isNew = new Date(p.createdAt).getTime() >= DATASET_NOW - 182 * 864e5
+                  return (
+                    <SelectItem key={p.id} value={p.id}>
+                      <span className="flex items-center gap-2">
+                        {p.name}
+                        <span className="text-muted-foreground text-xs">· {p.developer}</span>
+                        {isNew && <span className="text-blue-600 bg-blue-50 border border-blue-200 text-[10px] font-medium rounded px-1 py-0 leading-4">&lt; 6mo</span>}
+                        {!p.polygonUploaded && <span className="text-red-500 text-[10px]">no polygon</span>}
+                      </span>
+                    </SelectItem>
+                  )
+                })}
               </SelectContent>
             </Select>
+            {project && (
+              <p className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1.5">
+                <CalendarRange className="h-3 w-3" />
+                Project created {formatDateTime(project.createdAt)}
+              </p>
+            )}
             {project && !project.polygonUploaded && (
               <div className="flex items-start gap-2 rounded-md bg-red-50 border border-red-200 px-3 py-2 mt-1.5">
                 <AlertTriangle className="h-3.5 w-3.5 text-red-500 mt-0.5 shrink-0" />
                 <p className="text-xs text-red-700">
                   This project has no boundary polygons uploaded. Upload a polygon before requesting a capture.
+                </p>
+              </div>
+            )}
+            {project && recentlyCreated && (
+              <div className="flex items-start gap-2 rounded-md bg-blue-50 border border-blue-200 dark:bg-blue-900/20 dark:border-blue-900/40 px-3 py-2 mt-1.5">
+                <AlertTriangle className="h-3.5 w-3.5 text-blue-500 mt-0.5 shrink-0" />
+                <p className="text-xs text-blue-700 dark:text-blue-300">
+                  This project was created less than 6 months ago ({formatDateTime(project.createdAt)}).
+                  Construction is likely at an early stage — a new capture may not be needed yet.
                 </p>
               </div>
             )}
@@ -1149,17 +1183,32 @@ function CaptureDialog({
             </div>
           )}
 
-        {/* ── Previously captured (last 30 days) ── */}
-        {recent.length > 0 && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-900/40 p-3 space-y-2">
+        {/* ── Previously captured (same-or-higher quality) ── */}
+        {prior.length > 0 && (
+          <div className={cn(
+            "rounded-lg border p-3 space-y-2",
+            hasRecent
+              ? "border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-900/40"
+              : "border-border bg-muted/30",
+          )}>
             <div className="flex items-start gap-2">
-              <AlertTriangle className="h-3.5 w-3.5 text-amber-600 mt-0.5 shrink-0" />
-              <p className="text-xs text-amber-800 dark:text-amber-300">
-                This project was captured at <span className="font-semibold">{quality}</span> quality or higher within the last 30 days.
-                Review the existing {recent.length} capture{recent.length > 1 ? "s" : ""} before requesting a new one.
+              <AlertTriangle className={cn("h-3.5 w-3.5 mt-0.5 shrink-0", hasRecent ? "text-amber-600" : "text-muted-foreground")} />
+              <p className={cn("text-xs", hasRecent ? "text-amber-800 dark:text-amber-300" : "text-muted-foreground")}>
+                {hasRecent ? (
+                  <>
+                    This project was captured at <span className="font-semibold">{quality}</span> quality or higher
+                    within the <span className="font-semibold">last 30 days</span>. Review the existing
+                    {" "}{recent.length} recent capture{recent.length > 1 ? "s" : ""} before requesting a new one to avoid duplicate cost.
+                  </>
+                ) : (
+                  <>
+                    This project already has {prior.length} capture{prior.length > 1 ? "s" : ""} at
+                    {" "}<span className="font-semibold">{quality}</span> quality or higher in the past month. Review them before requesting a new capture.
+                  </>
+                )}
               </p>
             </div>
-            <div className="rounded-md border border-amber-200 dark:border-amber-900/40 overflow-hidden bg-card">
+            <div className="rounded-md border border-border overflow-hidden bg-card">
               <table className="w-full text-xs">
                 <thead className="bg-muted/50">
                   <tr>
@@ -1171,9 +1220,14 @@ function CaptureDialog({
                   </tr>
                 </thead>
                 <tbody>
-                  {recent.map((r) => (
-                    <tr key={r.id} className="border-t border-border hover:bg-muted/40 cursor-pointer" onClick={() => { onClose(); onView(r) }}>
-                      <td className="px-2.5 py-1.5 font-mono">{r.id}</td>
+                  {prior.map((r) => (
+                    <tr key={r.id} className="border-t border-border hover:bg-muted/40 cursor-pointer" onClick={() => onView(r)}>
+                      <td className="px-2.5 py-1.5 font-mono">
+                        <span className="inline-flex items-center gap-1.5">
+                          {r.id}
+                          {isRecent(r) && <span className="text-[9px] font-medium text-amber-600 bg-amber-100 dark:bg-amber-900/40 rounded px-1 py-0.5">≤30d</span>}
+                        </span>
+                      </td>
                       <td className="px-2.5 py-1.5"><QualityBadge quality={r.quality} /></td>
                       <td className="px-2.5 py-1.5 text-muted-foreground whitespace-nowrap">{formatDateTime(r.capturedAt)}</td>
                       <td className="px-2.5 py-1.5"><TypeBadge type={r.type} /></td>
