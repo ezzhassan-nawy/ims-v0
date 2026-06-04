@@ -1,6 +1,6 @@
 ﻿"use client"
 
-import { useState, useMemo } from "react"
+import React, { useState, useMemo } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -74,6 +74,7 @@ import {
 
 type ImageQuality = "Medium" | "High" | "Very High" | "Super High" | "Ultra High"
 type ImageType = "New" | "Archived"
+type CapturingStatus = "Queued" | "Requested" | "Captured"
 
 interface DeveloperInfo {
   id: string
@@ -99,6 +100,7 @@ interface SatelliteImage {
   costUsd: number
   costEgp: number
   systemRequested: string
+  capturingStatus: CapturingStatus
   requestedAt: string
   capturedAt: string
   type: ImageType
@@ -162,7 +164,7 @@ const SATELLITE_IMAGES: SatelliteImage[] = [
     totalAreaKm2: 3.24,
     ...calcCosts(3.24, "Pleiades-1A", 1.07),
     systemRequested: "IMS",
-    requestedAt: "2025-04-10 09:00", capturedAt: "2025-04-15 11:23",
+    capturingStatus: "Requested", requestedAt: "2025-04-10 09:00", capturedAt: "2025-04-15 11:23",
     type: "New", satellite: "Pleiades NEO", createdAt: "2025-04-15 14:32", updatedAt: "2025-04-16 16:40",
     metadata: { cloudCoverPct: 2.1, incidenceAngle: 8.4, sunElevation: 61.2, sunAzimuth: 154.3, processingLevel: "Ortho", bandsAvailable: ["RGB", "NIR"], bboxMinLat: 29.88, bboxMaxLat: 29.93, bboxMinLng: 30.94, bboxMaxLng: 31.01 },
   },
@@ -176,7 +178,7 @@ const SATELLITE_IMAGES: SatelliteImage[] = [
     totalAreaKm2: 7.82,
     ...calcCosts(7.82, "WorldView-3", 1.09),
     systemRequested: "E-realty",
-    requestedAt: "2025-03-28 08:30", capturedAt: "2025-04-02 10:14",
+    capturingStatus: "Captured", requestedAt: "2025-03-28 08:30", capturedAt: "2025-04-02 10:14",
     type: "New", satellite: "WorldView Legion", createdAt: "2025-04-02 09:15", updatedAt: "2025-04-03 10:22",
     metadata: { cloudCoverPct: 0.0, incidenceAngle: 5.1, sunElevation: 68.4, sunAzimuth: 162.7, processingLevel: "Pan-sharpened Ortho", bandsAvailable: ["RGB", "NIR", "SWIR", "Pan"], bboxMinLat: 30.96, bboxMaxLat: 31.03, bboxMinLng: 28.42, bboxMaxLng: 28.51 },
   },
@@ -190,7 +192,7 @@ const SATELLITE_IMAGES: SatelliteImage[] = [
     totalAreaKm2: 2.15,
     ...calcCosts(2.15, "SPOT-7", 1.06),
     systemRequested: "Listing",
-    requestedAt: "2024-11-05 10:00", capturedAt: "2024-11-18 09:55",
+    capturingStatus: "Captured", requestedAt: "2024-11-05 10:00", capturedAt: "2024-11-18 09:55",
     type: "Archived", satellite: "SPOT-7", createdAt: "2024-11-18 11:48", updatedAt: "2024-11-19 13:05",
     metadata: { cloudCoverPct: 5.4, incidenceAngle: 14.2, sunElevation: 52.8, sunAzimuth: 170.1, processingLevel: "Ortho Ready", bandsAvailable: ["RGB", "NIR"], bboxMinLat: 29.94, bboxMaxLat: 29.98, bboxMinLng: 30.87, bboxMaxLng: 30.93 },
   },
@@ -204,7 +206,7 @@ const SATELLITE_IMAGES: SatelliteImage[] = [
     totalAreaKm2: 5.41,
     ...calcCosts(5.41, "Pleiades-1B", 1.08),
     systemRequested: "IMS",
-    requestedAt: "2025-03-14 11:00", capturedAt: "2025-03-18 13:02",
+    capturingStatus: "Captured", requestedAt: "2025-03-14 11:00", capturedAt: "2025-03-18 13:02",
     type: "New", satellite: "Pleiades NEO", createdAt: "2025-03-18 16:05", updatedAt: "2025-03-19 17:33",
     metadata: { cloudCoverPct: 1.2, incidenceAngle: 7.8, sunElevation: 63.5, sunAzimuth: 149.2, processingLevel: "Ortho", bandsAvailable: ["RGB", "NIR"], bboxMinLat: 30.01, bboxMaxLat: 30.08, bboxMinLng: 31.44, bboxMaxLng: 31.52 },
   },
@@ -218,7 +220,7 @@ const SATELLITE_IMAGES: SatelliteImage[] = [
     totalAreaKm2: 4.28,
     ...calcCosts(4.28, "WorldView-2", 1.10),
     systemRequested: "E-realty",
-    requestedAt: "2025-02-20 07:00", capturedAt: "2025-02-24 08:41",
+    capturingStatus: "Captured", requestedAt: "2025-02-20 07:00", capturedAt: "2025-02-24 08:41",
     type: "New", satellite: "WorldView-2", createdAt: "2025-02-24 08:27", updatedAt: "2025-02-25 09:58",
     metadata: { cloudCoverPct: 3.7, incidenceAngle: 11.9, sunElevation: 57.4, sunAzimuth: 158.8, processingLevel: "Pan-sharpened Ortho", bandsAvailable: ["RGB", "NIR", "SWIR", "Pan"], bboxMinLat: 30.04, bboxMaxLat: 30.10, bboxMinLng: 31.55, bboxMaxLng: 31.62 },
   },
@@ -232,7 +234,7 @@ const SATELLITE_IMAGES: SatelliteImage[] = [
     totalAreaKm2: 2.93,
     ...calcCosts(2.93, "WorldView-3", 1.06),
     systemRequested: "Listing",
-    requestedAt: "2025-04-01 06:00", capturedAt: "2025-04-04 07:55",
+    capturingStatus: "Requested", requestedAt: "2025-04-01 06:00", capturedAt: "2025-04-04 07:55",
     type: "New", satellite: "WorldView Legion", createdAt: "2025-04-04 13:51", updatedAt: "2025-04-05 15:14",
     metadata: { cloudCoverPct: 0.0, incidenceAngle: 4.3, sunElevation: 70.1, sunAzimuth: 165.4, processingLevel: "Pan-sharpened Ortho", bandsAvailable: ["RGB", "NIR", "SWIR", "Pan", "Coastal"], bboxMinLat: 31.12, bboxMaxLat: 31.17, bboxMinLng: 27.68, bboxMaxLng: 27.74 },
   },
@@ -246,7 +248,7 @@ const SATELLITE_IMAGES: SatelliteImage[] = [
     totalAreaKm2: 1.87,
     ...calcCosts(1.87, "Pleiades-1A", 1.08),
     systemRequested: "IMS",
-    requestedAt: "2025-03-05 08:00", capturedAt: "2025-03-09 11:28",
+    capturingStatus: "Captured", requestedAt: "2025-03-05 08:00", capturedAt: "2025-03-09 11:28",
     type: "New", satellite: "Sentinel-2", createdAt: "2025-03-09 10:33", updatedAt: "2025-03-10 11:47",
     metadata: { cloudCoverPct: 1.8, incidenceAngle: 9.2, sunElevation: 60.8, sunAzimuth: 160.0, processingLevel: "Ortho", bandsAvailable: ["RGB", "NIR"], bboxMinLat: 31.06, bboxMaxLat: 31.10, bboxMinLng: 28.91, bboxMaxLng: 28.96 },
   },
@@ -260,7 +262,7 @@ const SATELLITE_IMAGES: SatelliteImage[] = [
     totalAreaKm2: 3.62,
     ...calcCosts(3.62, "SPOT-7", 1.05),
     systemRequested: "E-realty",
-    requestedAt: "2025-01-18 09:00", capturedAt: "2025-01-28 10:11",
+    capturingStatus: "Captured", requestedAt: "2025-01-18 09:00", capturedAt: "2025-01-28 10:11",
     type: "New", satellite: "SPOT-7", createdAt: "2025-01-28 15:19", updatedAt: "2025-01-29 16:52",
     metadata: { cloudCoverPct: 8.2, incidenceAngle: 18.4, sunElevation: 43.1, sunAzimuth: 175.6, processingLevel: "Ortho Ready", bandsAvailable: ["RGB", "NIR"], bboxMinLat: 30.02, bboxMaxLat: 30.08, bboxMinLng: 30.96, bboxMaxLng: 31.04 },
   },
@@ -274,7 +276,7 @@ const SATELLITE_IMAGES: SatelliteImage[] = [
     totalAreaKm2: 6.14,
     ...calcCosts(6.14, "Pleiades-1B", 1.09),
     systemRequested: "Listing",
-    requestedAt: "2024-10-12 10:30", capturedAt: "2024-10-17 12:05",
+    capturingStatus: "Captured", requestedAt: "2024-10-12 10:30", capturedAt: "2024-10-17 12:05",
     type: "Archived", satellite: "Pleiades NEO", createdAt: "2024-10-17 07:42", updatedAt: "2024-10-18 08:19",
     metadata: { cloudCoverPct: 4.1, incidenceAngle: 10.7, sunElevation: 55.9, sunAzimuth: 153.8, processingLevel: "Ortho", bandsAvailable: ["RGB", "NIR"], bboxMinLat: 30.06, bboxMaxLat: 30.13, bboxMinLng: 31.49, bboxMaxLng: 31.58 },
   },
@@ -288,7 +290,7 @@ const SATELLITE_IMAGES: SatelliteImage[] = [
     totalAreaKm2: 4.77,
     ...calcCosts(4.77, "WorldView-2", 1.07),
     systemRequested: "IMS",
-    requestedAt: "2025-04-08 07:00", capturedAt: "2025-04-12 09:33",
+    capturingStatus: "Queued", requestedAt: "2025-04-08 07:00", capturedAt: "2025-04-12 09:33",
     type: "New", satellite: "WorldView-2", createdAt: "2025-04-12 12:58", updatedAt: "2025-04-13 14:26",
     metadata: { cloudCoverPct: 0.6, incidenceAngle: 6.2, sunElevation: 64.7, sunAzimuth: 151.4, processingLevel: "Pan-sharpened Ortho", bandsAvailable: ["RGB", "NIR", "Pan"], bboxMinLat: 30.08, bboxMaxLat: 30.15, bboxMinLng: 31.40, bboxMaxLng: 31.48 },
   },
@@ -302,7 +304,7 @@ const SATELLITE_IMAGES: SatelliteImage[] = [
     totalAreaKm2: 3.09,
     ...calcCosts(3.09, "Pleiades-1A", 1.10),
     systemRequested: "E-realty",
-    requestedAt: "2024-07-22 06:00", capturedAt: "2024-07-27 08:14",
+    capturingStatus: "Captured", requestedAt: "2024-07-22 06:00", capturedAt: "2024-07-27 08:14",
     type: "Archived", satellite: "Sentinel-1", createdAt: "2024-07-27 17:11", updatedAt: "2024-07-28 18:03",
     metadata: { cloudCoverPct: 0.0, incidenceAngle: 8.8, sunElevation: 70.3, sunAzimuth: 145.6, processingLevel: "Ortho", bandsAvailable: ["RGB", "NIR"], bboxMinLat: 29.62, bboxMaxLat: 29.67, bboxMinLng: 32.31, bboxMaxLng: 32.38 },
   },
@@ -316,7 +318,7 @@ const SATELLITE_IMAGES: SatelliteImage[] = [
     totalAreaKm2: 8.34,
     ...calcCosts(8.34, "WorldView-2", 1.08),
     systemRequested: "Listing",
-    requestedAt: "2024-08-10 07:00", capturedAt: "2024-08-14 10:22",
+    capturingStatus: "Captured", requestedAt: "2024-08-10 07:00", capturedAt: "2024-08-14 10:22",
     type: "Archived", satellite: "Copernicus-3", createdAt: "2024-08-14 09:46", updatedAt: "2024-08-15 10:51",
     metadata: { cloudCoverPct: 2.9, incidenceAngle: 13.1, sunElevation: 67.8, sunAzimuth: 148.2, processingLevel: "Pan-sharpened Ortho", bandsAvailable: ["RGB", "NIR", "SWIR", "Pan"], bboxMinLat: 30.11, bboxMaxLat: 30.21, bboxMinLng: 30.71, bboxMaxLng: 30.82 },
   },
@@ -330,7 +332,7 @@ const SATELLITE_IMAGES: SatelliteImage[] = [
     totalAreaKm2: 5.22,
     ...calcCosts(5.22, "SPOT-7", 1.06),
     systemRequested: "IMS",
-    requestedAt: "2024-05-30 09:00", capturedAt: "2024-06-10 11:40",
+    capturingStatus: "Captured", requestedAt: "2024-05-30 09:00", capturedAt: "2024-06-10 11:40",
     type: "Archived", satellite: "SPOT-7", createdAt: "2024-06-10 14:03", updatedAt: "2024-06-11 15:38",
     metadata: { cloudCoverPct: 6.8, incidenceAngle: 16.4, sunElevation: 72.1, sunAzimuth: 142.3, processingLevel: "Ortho Ready", bandsAvailable: ["RGB", "NIR"], bboxMinLat: 30.12, bboxMaxLat: 30.19, bboxMinLng: 31.58, bboxMaxLng: 31.67 },
   },
@@ -344,7 +346,7 @@ const SATELLITE_IMAGES: SatelliteImage[] = [
     totalAreaKm2: 1.43,
     ...calcCosts(1.43, "Sentinel-2", 1.12),
     systemRequested: "E-realty",
-    requestedAt: "2024-03-01 00:00", capturedAt: "2024-03-06 09:22",
+    capturingStatus: "Captured", requestedAt: "2024-03-01 00:00", capturedAt: "2024-03-06 09:22",
     type: "Archived", satellite: "Sentinel-2", createdAt: "2024-03-06 11:22", updatedAt: "2024-03-07 12:44",
     metadata: { cloudCoverPct: 11.4, incidenceAngle: 22.7, sunElevation: 48.3, sunAzimuth: 168.9, processingLevel: "L2A Surface Reflectance", bandsAvailable: ["RGB", "NIR", "SWIR", "Red Edge"], bboxMinLat: 29.58, bboxMaxLat: 29.61, bboxMinLng: 32.40, bboxMaxLng: 32.44 },
   },
@@ -358,7 +360,7 @@ const SATELLITE_IMAGES: SatelliteImage[] = [
     totalAreaKm2: 2.41,
     ...calcCosts(2.41, "WorldView-3", 1.06),
     systemRequested: "Listing",
-    requestedAt: "2025-04-14 06:00", capturedAt: "2025-04-17 08:50",
+    capturingStatus: "Queued", requestedAt: "2025-04-14 06:00", capturedAt: "2025-04-17 08:50",
     type: "New", satellite: "WorldView Legion", createdAt: "2025-04-17 16:37", updatedAt: "2025-04-18 17:09",
     metadata: { cloudCoverPct: 0.0, incidenceAngle: 3.9, sunElevation: 66.2, sunAzimuth: 152.1, processingLevel: "Pan-sharpened Ortho", bandsAvailable: ["RGB", "NIR", "SWIR", "Pan", "Coastal", "Yellow"], bboxMinLat: 30.02, bboxMaxLat: 30.06, bboxMinLng: 31.36, bboxMaxLng: 31.41 },
   },
@@ -372,7 +374,7 @@ const SATELLITE_IMAGES: SatelliteImage[] = [
     totalAreaKm2: 7.15,
     ...calcCosts(7.15, "Pleiades-1A", 1.07),
     systemRequested: "IMS",
-    requestedAt: "2025-03-22 09:00", capturedAt: "2025-03-25 12:18",
+    capturingStatus: "Captured", requestedAt: "2025-03-22 09:00", capturedAt: "2025-03-25 12:18",
     type: "New", satellite: "Pleiades NEO", createdAt: "2025-03-25 08:54", updatedAt: "2025-03-26 09:31",
     metadata: { cloudCoverPct: 3.3, incidenceAngle: 10.2, sunElevation: 60.4, sunAzimuth: 156.7, processingLevel: "Ortho", bandsAvailable: ["RGB", "NIR"], bboxMinLat: 29.96, bboxMaxLat: 30.04, bboxMinLng: 31.43, bboxMaxLng: 31.52 },
   },
@@ -386,7 +388,7 @@ const SATELLITE_IMAGES: SatelliteImage[] = [
     totalAreaKm2: 4.67,
     ...calcCosts(4.67, "WorldView-3", 1.09),
     systemRequested: "E-realty",
-    requestedAt: "2025-04-06 05:30", capturedAt: "2025-04-09 07:44",
+    capturingStatus: "Requested", requestedAt: "2025-04-06 05:30", capturedAt: "2025-04-09 07:44",
     type: "New", satellite: "WorldView Legion", createdAt: "2025-04-09 13:08", updatedAt: "2025-04-10 14:50",
     metadata: { cloudCoverPct: 0.0, incidenceAngle: 4.7, sunElevation: 69.8, sunAzimuth: 163.3, processingLevel: "Pan-sharpened Ortho", bandsAvailable: ["RGB", "NIR", "SWIR", "Pan"], bboxMinLat: 31.18, bboxMaxLat: 31.24, bboxMinLng: 27.41, bboxMaxLng: 27.48 },
   },
@@ -400,7 +402,7 @@ const SATELLITE_IMAGES: SatelliteImage[] = [
     totalAreaKm2: 3.88,
     ...calcCosts(3.88, "SPOT-7", 1.08),
     systemRequested: "Listing",
-    requestedAt: "2025-02-10 08:00", capturedAt: "2025-02-22 10:30",
+    capturingStatus: "Captured", requestedAt: "2025-02-10 08:00", capturedAt: "2025-02-22 10:30",
     type: "New", satellite: "Sentinel-1", createdAt: "2025-02-22 10:19", updatedAt: "2025-02-23 11:08",
     metadata: { cloudCoverPct: 7.1, incidenceAngle: 15.8, sunElevation: 50.6, sunAzimuth: 172.4, processingLevel: "Ortho Ready", bandsAvailable: ["RGB", "NIR"], bboxMinLat: 30.07, bboxMaxLat: 30.12, bboxMinLng: 31.46, bboxMaxLng: 31.53 },
   },
@@ -414,7 +416,7 @@ const SATELLITE_IMAGES: SatelliteImage[] = [
     totalAreaKm2: 6.23,
     ...calcCosts(6.23, "Pleiades-1B", 1.06),
     systemRequested: "IMS",
-    requestedAt: "2025-04-03 10:00", capturedAt: "2025-04-07 12:48",
+    capturingStatus: "Requested", requestedAt: "2025-04-03 10:00", capturedAt: "2025-04-07 12:48",
     type: "New", satellite: "Pleiades NEO", createdAt: "2025-04-07 15:44", updatedAt: "2025-04-08 16:21",
     metadata: { cloudCoverPct: 1.4, incidenceAngle: 8.0, sunElevation: 62.9, sunAzimuth: 155.8, processingLevel: "Ortho", bandsAvailable: ["RGB", "NIR"], bboxMinLat: 29.99, bboxMaxLat: 30.06, bboxMinLng: 30.76, bboxMaxLng: 30.84 },
   },
@@ -428,7 +430,7 @@ const SATELLITE_IMAGES: SatelliteImage[] = [
     totalAreaKm2: 2.64,
     ...calcCosts(2.64, "WorldView-2", 1.10),
     systemRequested: "E-realty",
-    requestedAt: "2024-09-14 07:00", capturedAt: "2024-09-18 09:05",
+    capturingStatus: "Captured", requestedAt: "2024-09-14 07:00", capturedAt: "2024-09-18 09:05",
     type: "Archived", satellite: "WorldView-2", createdAt: "2024-09-18 12:31", updatedAt: "2024-09-19 13:55",
     metadata: { cloudCoverPct: 4.8, incidenceAngle: 12.6, sunElevation: 65.4, sunAzimuth: 147.9, processingLevel: "Pan-sharpened Ortho", bandsAvailable: ["RGB", "NIR", "Pan"], bboxMinLat: 30.06, bboxMaxLat: 30.11, bboxMinLng: 30.69, bboxMaxLng: 30.76 },
   },
@@ -462,7 +464,8 @@ const ALL_COLUMNS = [
   { id: "requested",    label: "Requested",         alwaysVisible: false },
   { id: "captured",     label: "Captured",          alwaysVisible: false },
   { id: "type",         label: "Type",              alwaysVisible: false },
-  { id: "satellite",    label: "Satellite",         alwaysVisible: false },
+  { id: "satellite",       label: "Satellite",          alwaysVisible: false },
+  { id: "capturingStatus", label: "Capturing Status",   alwaysVisible: false },
   { id: "createdAt",    label: "Created At",        alwaysVisible: false },
   { id: "updatedAt",    label: "Updated At",        alwaysVisible: false },
 ]
@@ -632,7 +635,8 @@ const IMAGE_GROUP_COLS = [
   { id: "phaseName",       label: "Phase" },
   { id: "quality",         label: "Quality" },
   { id: "type",            label: "Type" },
-  { id: "systemRequested", label: "System Requested" },
+  { id: "systemRequested",  label: "System Requested" },
+  { id: "capturingStatus",  label: "Capturing Status" },
 ]
 
 function getGroupValue(row: SatelliteImage, col: string): string {
@@ -644,6 +648,7 @@ function getGroupValue(row: SatelliteImage, col: string): string {
     case "quality":         return row.quality
     case "type":            return row.type
     case "systemRequested": return row.systemRequested
+    case "capturingStatus": return row.capturingStatus
     default:                return ""
   }
 }
@@ -891,6 +896,712 @@ function CopyId({ value, className }: { value: string; className?: string }) {
   )
 }
 
+// ─── Construction Analysis: types + mock data ─────────────────────────────────
+
+type PaceLabel = "Stalled" | "Slow" | "Moderate" | "Fast" | "Very Fast"
+
+interface CategoryProgress {
+  pct: number
+  from?: number   // prior value (for delta display)
+  delta?: number
+  driver?: boolean
+}
+
+interface ConstructionSnapshot {
+  overallPct: number
+  categories: {
+    siteInfrastructure: CategoryProgress
+    structuralProgress:  CategoryProgress
+    landscaping:         CategoryProgress
+    waterFeatures:       CategoryProgress
+  }
+  qualitativeText: string
+  delta: {
+    period:        string
+    days:          number
+    overallFrom:   number
+    velocity:      number
+    pace:          PaceLabel
+    primaryDriver: string
+    deltaSummary:  string
+  } | null
+}
+
+// ── Helpers ──
+// Overall progress color: < 30% orange, < 70% blue, >= 70% green
+function progressColor(pct: number): string {
+  return pct >= 70 ? "bg-green-500" : pct >= 30 ? "bg-blue-500" : "bg-orange-500"
+}
+
+// Quarter helper: "2025-04-15 11:23" → "Q2 2025"
+function toQuarter(dateStr: string): string {
+  const [y, m] = dateStr.split("-").map(Number)
+  return `Q${Math.ceil(m / 3)} ${y}`
+}
+
+// Parse period string "Nov 2024 → Apr 2025" → { before: "Q4 '24", after: "Q2 '25" }
+function deltaToQuarters(period: string): { before: string; after: string } {
+  const parts = period.split("→").map(s => s.trim())
+  const MNS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+  const parse = (s: string) => {
+    const [mon, yr] = s.split(" ")
+    const mi = MNS.indexOf(mon) + 1
+    return mi > 0 ? `Q${Math.ceil(mi / 3)} '${yr?.slice(2) ?? ""}` : s
+  }
+  return { before: parse(parts[0] ?? ""), after: parse(parts[1] ?? "") }
+}
+
+function CapturingStatusBadge({ status }: { status: CapturingStatus }) {
+  const styles: Record<CapturingStatus, string> = {
+    "Queued":    "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400",
+    "Requested": "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400",
+    "Captured":  "bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400",
+  }
+  return (
+    <Badge variant="outline" className={cn("text-[11px] font-medium px-1.5 py-0", styles[status])}>
+      {status}
+    </Badge>
+  )
+}
+
+function catLabel(pct: number): string {
+  if (pct >= 95) return "Complete"
+  if (pct >= 80) return "Largely Complete"
+  if (pct >= 50) return "Advanced"
+  if (pct >= 20) return "In Progress"
+  return "Early Stage"
+}
+
+function paceColor(pace: PaceLabel): string {
+  if (pace === "Very Fast") return "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400"
+  if (pace === "Fast")      return "bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400"
+  if (pace === "Moderate")  return "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400"
+  if (pace === "Slow")      return "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400"
+  return "bg-muted text-muted-foreground"
+}
+
+// ── Mock construction data keyed by image ID ──
+const CONSTRUCTION_ANALYSIS: Record<string, ConstructionSnapshot> = {
+  "SAT-2025-001": {
+    overallPct: 68,
+    categories: {
+      siteInfrastructure: { pct: 88, from: 76, delta: +12, driver: false },
+      structuralProgress:  { pct: 71, from: 56, delta: +15, driver: true  },
+      landscaping:         { pct: 52, from: 40, delta: +12, driver: true  },
+      waterFeatures:       { pct: 41, from: 35, delta: +6,  driver: false },
+    },
+    qualitativeText: "Palm Hills October Phase 2 shows steady mid-stage advancement. Site infrastructure is largely complete across the eastern cluster. Structural framing has passed the 70% threshold with active work observed in the northern residential blocks.",
+    delta: { period: "Nov 2024 → Apr 2025", days: 152, overallFrom: 55, velocity: 0.086, pace: "Moderate", primaryDriver: "Structural Progress", deltaSummary: "Between November 2024 and April 2025, structural activity was the dominant driver — approximately 15 additional building footprints showed above-ground framing. Landscaping activity also accelerated meaningfully, particularly in the eastern residential corridors." },
+  },
+  "SAT-2025-002": {
+    overallPct: 75,
+    categories: {
+      siteInfrastructure: { pct: 92, from: 84, delta: +8,  driver: false },
+      structuralProgress:  { pct: 78, from: 65, delta: +13, driver: false },
+      landscaping:         { pct: 67, from: 50, delta: +17, driver: true  },
+      waterFeatures:       { pct: 64, from: 52, delta: +12, driver: true  },
+    },
+    qualitativeText: "Marassi Phase 5 stands as one of the most advanced captures in this dataset. Beachfront infrastructure is nearly complete and the central hub landscaping is in full progress. Waterfront feature installation has advanced noticeably since the previous capture.",
+    delta: { period: "Sep 2024 → Mar 2025", days: 181, overallFrom: 62, velocity: 0.072, pace: "Moderate", primaryDriver: "Landscaping", deltaSummary: "Landscaping was the primary driver between September 2024 and March 2025, with notable activity across the resort-facing zones. Water feature installation also progressed materially, consistent with the resort's phased delivery schedule." },
+  },
+  "SAT-2025-003": {
+    overallPct: 38,
+    categories: {
+      siteInfrastructure: { pct: 72, driver: false },
+      structuralProgress:  { pct: 31, driver: false },
+      landscaping:         { pct: 12, driver: false },
+      waterFeatures:       { pct: 8,  driver: false },
+    },
+    qualitativeText: "This is the first recorded capture of Allegria Phase 1. The site shows early-to-mid stage construction with site infrastructure well underway. Structural activity is concentrated in the southern residential blocks and is approximately one-third complete.",
+    delta: null,
+  },
+  "SAT-2025-004": {
+    overallPct: 52,
+    categories: {
+      siteInfrastructure: { pct: 81, from: 70, delta: +11, driver: false },
+      structuralProgress:  { pct: 54, from: 40, delta: +14, driver: true  },
+      landscaping:         { pct: 34, from: 26, delta: +8,  driver: false },
+      waterFeatures:       { pct: 22, from: 17, delta: +5,  driver: false },
+    },
+    qualitativeText: "Hyde Park Estate Phase 3 has reached the midpoint of construction. Road infrastructure is largely complete while structural framing has crossed 50% across the villa and apartment clusters. Landscaping is progressing in completed structural zones.",
+    delta: { period: "Oct 2024 → Mar 2025", days: 152, overallFrom: 41, velocity: 0.072, pace: "Moderate", primaryDriver: "Structural Progress", deltaSummary: "Structural progress was the dominant driver between October 2024 and March 2025, with 14 additional percentage points recorded. Activity was concentrated in the mid-section apartment towers and the villa cluster adjacent to the central park." },
+  },
+  "SAT-2025-005": {
+    overallPct: 61,
+    categories: {
+      siteInfrastructure: { pct: 87, from: 76, delta: +11, driver: false },
+      structuralProgress:  { pct: 64, from: 50, delta: +14, driver: true  },
+      landscaping:         { pct: 43, from: 32, delta: +11, driver: true  },
+      waterFeatures:       { pct: 33, from: 27, delta: +6,  driver: false },
+    },
+    qualitativeText: "Mountain View iCity Phase 4 shows sustained advancement across all categories. Structural progress has surpassed 60% with significant activity in the high-density residential towers. Landscaping has been initiated in structurally completed sections, suggesting the project is approaching delivery-readiness in the southern cluster.",
+    delta: { period: "Aug 2024 → Feb 2025", days: 184, overallFrom: 48, velocity: 0.071, pace: "Moderate", primaryDriver: "Structural Progress", deltaSummary: "Structural progress and landscaping advanced in parallel between August 2024 and February 2025. Structural gains were concentrated in the Phase 4 tower cluster, while landscaping activation began across the early-completing southern zones." },
+  },
+  "SAT-2025-006": {
+    overallPct: 48,
+    categories: {
+      siteInfrastructure: { pct: 76, from: 65, delta: +11, driver: true  },
+      structuralProgress:  { pct: 47, from: 37, delta: +10, driver: false },
+      landscaping:         { pct: 34, from: 25, delta: +9,  driver: false },
+      waterFeatures:       { pct: 29, from: 22, delta: +7,  driver: false },
+    },
+    qualitativeText: "Silversands Phase 2 is progressing at a consistent pace across all categories. The coastal infrastructure network — including beachfront access roads and utility corridors — is significantly advanced. Structural activity is concentrated in the premium villa cluster facing the Mediterranean.",
+    delta: { period: "Nov 2024 → Apr 2025", days: 150, overallFrom: 38, velocity: 0.067, pace: "Moderate", primaryDriver: "Site Infrastructure", deltaSummary: "Site infrastructure was the primary driver between November 2024 and April 2025, with coastal access roads and utility networks progressing materially. All four categories showed measurable gains, suggesting broad-front construction activity across the site." },
+  },
+  "SAT-2025-007": {
+    overallPct: 44,
+    categories: {
+      siteInfrastructure: { pct: 78, from: 65, delta: +13, driver: true  },
+      structuralProgress:  { pct: 42, from: 32, delta: +10, driver: true  },
+      landscaping:         { pct: 22, from: 16, delta: +6,  driver: false },
+      waterFeatures:       { pct: 18, from: 13, delta: +5,  driver: false },
+    },
+    qualitativeText: "Fouka Bay Phase 1 reflects active mid-stage construction with notable gains in both infrastructure and structural categories. The beachfront access corridors are well-established and framing activity is visible across a wide area of the residential zones.",
+    delta: { period: "Sep 2024 → Mar 2025", days: 181, overallFrom: 34, velocity: 0.055, pace: "Moderate", primaryDriver: "Site Infrastructure", deltaSummary: "Site infrastructure and structural progress advanced in parallel over this 181-day period. Infrastructure gains were particularly notable in the northern beachfront corridors, while structural framing activated across multiple new residential clusters." },
+  },
+  "SAT-2025-008": {
+    overallPct: 29,
+    categories: {
+      siteInfrastructure: { pct: 64, driver: false },
+      structuralProgress:  { pct: 22, driver: false },
+      landscaping:         { pct: 8,  driver: false },
+      waterFeatures:       { pct: 5,  driver: false },
+    },
+    qualitativeText: "This is the first recorded capture of ZED Phase 3. The site is in early construction with primary road networks and utility trenches visible from orbit. Structural above-ground activity is limited to the south-facing villa cluster.",
+    delta: null,
+  },
+  "SAT-2025-009": {
+    overallPct: 72,
+    categories: {
+      siteInfrastructure: { pct: 91, driver: false },
+      structuralProgress:  { pct: 75, driver: false },
+      landscaping:         { pct: 58, driver: false },
+      waterFeatures:       { pct: 47, driver: false },
+    },
+    qualitativeText: "Villette Phase 2 is in an advanced state of construction. Internal road networks are virtually complete and structural framing has been observed across more than three-quarters of the residential footprint. Landscaping installation is actively progressing in the completed structural zones.",
+    delta: null,
+  },
+  "SAT-2024-011": {
+    overallPct: 83,
+    categories: {
+      siteInfrastructure: { pct: 96, driver: false },
+      structuralProgress:  { pct: 88, driver: false },
+      landscaping:         { pct: 74, driver: false },
+      waterFeatures:       { pct: 68, driver: false },
+    },
+    qualitativeText: "Telal El Sokhna Phase 4 is in the late stages of construction and approaching handover readiness. Infrastructure is virtually complete. Structural finishing works are ongoing across the remaining units and landscaping is being actively finalized across the resort grounds.",
+    delta: null,
+  },
+  "SAT-2024-012": {
+    overallPct: 67,
+    categories: {
+      siteInfrastructure: { pct: 89, driver: false },
+      structuralProgress:  { pct: 71, driver: false },
+      landscaping:         { pct: 51, driver: false },
+      waterFeatures:       { pct: 42, driver: false },
+    },
+    qualitativeText: "Badya Phase 2 shows considerable advancement. Site infrastructure is largely complete across the expansive masterplan. Structural activity has covered over 70% of the residential footprint and landscaping installation is underway across completed structural zones.",
+    delta: null,
+  },
+  "SAT-2024-013": {
+    overallPct: 45,
+    categories: {
+      siteInfrastructure: { pct: 79, driver: false },
+      structuralProgress:  { pct: 46, driver: false },
+      landscaping:         { pct: 25, driver: false },
+      waterFeatures:       { pct: 14, driver: false },
+    },
+    qualitativeText: "Sarai Phase 3 is progressing at a measured pace. Site infrastructure is well-established and structural framing is active across the central and western clusters. Landscaping remains in early stages and is primarily concentrated in completed structural zones near the entrance.",
+    delta: null,
+  },
+  "SAT-2024-014": {
+    overallPct: 22,
+    categories: {
+      siteInfrastructure: { pct: 58, driver: false },
+      structuralProgress:  { pct: 18, driver: false },
+      landscaping:         { pct: 6,  driver: false },
+      waterFeatures:       { pct: 3,  driver: false },
+    },
+    qualitativeText: "La Vista Gardens Phase 1 is in the early stages of development. Road grading and primary utility installation is underway across approximately 60% of the site. Structural activity is limited to foundations and ground-level framing in the pilot residential cluster.",
+    delta: null,
+  },
+  "SAT-2025-010": {
+    overallPct: 57,
+    categories: {
+      siteInfrastructure: { pct: 83, from: 72, delta: +11, driver: false },
+      structuralProgress:  { pct: 60, from: 47, delta: +13, driver: true  },
+      landscaping:         { pct: 38, from: 28, delta: +10, driver: false },
+      waterFeatures:       { pct: 27, from: 20, delta: +7,  driver: false },
+    },
+    qualitativeText: "Palm Hills New Cairo Phase 1 has passed the halfway mark with consistent progress across all construction categories. Structural framing has activated in the tower and villa clusters simultaneously, indicating broad-front construction activity.",
+    delta: { period: "Oct 2024 → Apr 2025", days: 182, overallFrom: 46, velocity: 0.060, pace: "Moderate", primaryDriver: "Structural Progress", deltaSummary: "Structural progress was the dominant driver over this six-month period with 13 percentage points of gain. Activity was distributed across both the apartment towers and the residential villa cluster, with the most significant new framing observed in the Phase 1A tower group." },
+  },
+  "SAT-2025-015": {
+    overallPct: 71,
+    categories: {
+      siteInfrastructure: { pct: 90, from: 82, delta: +8,  driver: false },
+      structuralProgress:  { pct: 74, from: 63, delta: +11, driver: false },
+      landscaping:         { pct: 59, from: 43, delta: +16, driver: true  },
+      waterFeatures:       { pct: 48, from: 36, delta: +12, driver: true  },
+    },
+    qualitativeText: "The Lake Phase 1 shows one of the highest progress rates among recent captures. The project is in an advanced stage with landscaping and water feature installation actively accelerating — characteristic of a project approaching its final construction phase.",
+    delta: { period: "Jan 2025 → Apr 2025", days: 90, overallFrom: 60, velocity: 0.122, pace: "Fast", primaryDriver: "Landscaping", deltaSummary: "This 90-day window recorded the fastest progress rate in The Lake Phase 1's capture history. Landscaping and water feature installation advanced markedly — 16 and 12 percentage points respectively — consistent with accelerated finishing works ahead of a planned handover window." },
+  },
+  "SAT-2025-016": {
+    overallPct: 63,
+    categories: {
+      siteInfrastructure: { pct: 88, from: 77, delta: +11, driver: false },
+      structuralProgress:  { pct: 66, from: 53, delta: +13, driver: true  },
+      landscaping:         { pct: 47, from: 36, delta: +11, driver: false },
+      waterFeatures:       { pct: 38, from: 29, delta: +9,  driver: false },
+    },
+    qualitativeText: "Uptown Cairo Phase 6 is in active mid-stage construction with consistent gains across categories. Structural activity is spread across both the high-rise residential towers and the mid-rise clusters, reflecting a broad-front construction approach.",
+    delta: { period: "Sep 2024 → Mar 2025", days: 182, overallFrom: 52, velocity: 0.060, pace: "Moderate", primaryDriver: "Structural Progress", deltaSummary: "Structural progress continued as the primary driver between September 2024 and March 2025. Tower framing activity was most notable in the eastern cluster, while site infrastructure completion progressed materially across the western access routes." },
+  },
+  "SAT-2025-017": {
+    overallPct: 55,
+    categories: {
+      siteInfrastructure: { pct: 82, from: 70, delta: +12, driver: true  },
+      structuralProgress:  { pct: 57, from: 44, delta: +13, driver: true  },
+      landscaping:         { pct: 39, from: 28, delta: +11, driver: false },
+      waterFeatures:       { pct: 30, from: 22, delta: +8,  driver: false },
+    },
+    qualitativeText: "Riviera Phase 1 is progressing steadily across all construction categories. The coastal location drives a site infrastructure-first approach, which is reflected in the advanced infrastructure score. Structural framing is active across approximately half the residential plots.",
+    delta: { period: "Nov 2024 → Apr 2025", days: 150, overallFrom: 43, velocity: 0.080, pace: "Moderate", primaryDriver: "Structural Progress", deltaSummary: "Both site infrastructure and structural progress advanced materially between November 2024 and April 2025. Infrastructure gains reflect completion of the coastal access road network, while structural gains are distributed across both the villa cluster and the mid-rise residential blocks." },
+  },
+  "SAT-2025-018": {
+    overallPct: 35,
+    categories: {
+      siteInfrastructure: { pct: 69, driver: false },
+      structuralProgress:  { pct: 28, driver: false },
+      landscaping:         { pct: 10, driver: false },
+      waterFeatures:       { pct: 6,  driver: false },
+    },
+    qualitativeText: "Eastown Phase 5 is in early-to-mid construction phase with infrastructure well underway and structural framing recently initiated. The site shows primary road networks established and active foundation work in the northern residential cluster.",
+    delta: null,
+  },
+  "SAT-2025-019": {
+    overallPct: 60,
+    categories: {
+      siteInfrastructure: { pct: 86, from: 74, delta: +12, driver: true  },
+      structuralProgress:  { pct: 63, from: 50, delta: +13, driver: true  },
+      landscaping:         { pct: 44, from: 33, delta: +11, driver: false },
+      waterFeatures:       { pct: 34, from: 26, delta: +8,  driver: false },
+    },
+    qualitativeText: "O West Phase 3 continues advancing at a consistent pace. The expanded masterplan shows broad-front construction activity with site infrastructure nearing completion across the eastern sectors. Structural framing has activated across approximately two-thirds of planned residential footprints.",
+    delta: { period: "Oct 2024 → Apr 2025", days: 182, overallFrom: 49, velocity: 0.060, pace: "Moderate", primaryDriver: "Structural Progress", deltaSummary: "Structural progress and site infrastructure advanced in parallel between October 2024 and April 2025. Infrastructure completion progressed strongly in the eastern sector, while structural framing was activated across new residential clusters in the central zone." },
+  },
+  "SAT-2024-020": {
+    overallPct: 51,
+    categories: {
+      siteInfrastructure: { pct: 80, driver: false },
+      structuralProgress:  { pct: 53, driver: false },
+      landscaping:         { pct: 33, driver: false },
+      waterFeatures:       { pct: 21, driver: false },
+    },
+    qualitativeText: "Mountain View October Phase 2 is at the midpoint of construction. Road infrastructure and utilities are well-advanced and structural framing has been observed across just over half the residential footprint. Landscaping is in early-to-mid stage.",
+    delta: null,
+  },
+}
+
+// ─── Shared image card (Nawy Space / Mapbox / Masterplan + polygon) ──────────
+
+type DrawerBase = "Nawy Space" | "Mapbox" | "Masterplan"
+const DRAWER_BASES: DrawerBase[] = ["Mapbox", "Nawy Space", "Masterplan"]
+
+function MapBaseRenderer({
+  image, base, showPolygon, className,
+}: {
+  image: SatelliteImage; base: DrawerBase; showPolygon: boolean; className?: string
+}) {
+  const isCoastal = image.areaName.includes("Sahel") || image.areaName.includes("Sokhna")
+  const isUrban   = image.areaName.includes("Cairo") || image.areaName.includes("October") || image.areaName.includes("Zayed")
+  const pal = isCoastal
+    ? { bg:"#1a4e6e", a:"#28728a", b:"#e8d9a0", c:"#2e8c66", d:"#4a9cb8" }
+    : isUrban
+    ? { bg:"#484858", a:"#8a9a88", b:"#c8c8b8", c:"#6a7868", d:"#9a9a8a" }
+    : { bg:"#2e5e3e", a:"#4e8a5e", b:"#d8cc8e", c:"#5a9a6a", d:"#7ab888" }
+  const h = image.id.split("").reduce((a, c) => a + c.charCodeAt(0), 0)
+  const mbMonth = (h % 12) + 1
+  const mbYear  = 2021 + (h % 3)
+  return (
+    <div className={cn("relative overflow-hidden rounded-lg", className)}>
+      {base === "Nawy Space" && (
+        <div className="absolute inset-0" style={{ backgroundColor: pal.bg }}>
+          <div className="absolute inset-0" style={{ background:`linear-gradient(${h%360}deg,${pal.a}88 0%,${pal.b}55 35%,${pal.c}88 65%,${pal.d}44 100%)` }}/>
+          <div className="absolute" style={{ top:"8%",left:"8%",width:`${38+(h%15)}%`,height:`${32+(h%20)}%`,backgroundColor:pal.a,opacity:0.7 }}/>
+          <div className="absolute" style={{ top:"8%",right:"8%",width:`${28+(h%20)}%`,height:`${42+(h%15)}%`,backgroundColor:pal.b,opacity:0.55 }}/>
+          <div className="absolute" style={{ bottom:"12%",left:"12%",right:"12%",height:`${24+(h%15)}%`,backgroundColor:pal.c,opacity:0.6 }}/>
+          <div className="absolute inset-0 opacity-[0.05]" style={{ backgroundImage:"linear-gradient(rgba(255,255,255,.8) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.8) 1px,transparent 1px)",backgroundSize:"56px 56px" }}/>
+          <svg className="absolute inset-0 w-full h-full opacity-20" style={{ pointerEvents:"none" }}>
+            <line x1="0" y1="44%" x2="100%" y2="47%" stroke="white" strokeWidth="2"/>
+            <line x1="36%" y1="0" x2="39%" y2="100%" stroke="white" strokeWidth="2"/>
+            <line x1="64%" y1="0" x2="66%" y2="100%" stroke="white" strokeWidth="1"/>
+          </svg>
+        </div>
+      )}
+      {base === "Mapbox" && (
+        <div className="absolute inset-0" style={{ backgroundColor:"#e8e6e1" }}>
+          <div className="absolute rounded-lg" style={{ top:"10%",left:"6%",width:"22%",height:"26%",backgroundColor:"#cfe3c0" }}/>
+          <div className="absolute rounded-lg" style={{ bottom:"14%",right:"10%",width:"26%",height:"30%",backgroundColor:"#cfe3c0" }}/>
+          <div className="absolute" style={{ top:"0",right:"0",width:"30%",height:"22%",backgroundColor:"#a9d4e5" }}/>
+          <svg className="absolute inset-0 w-full h-full" style={{ pointerEvents:"none" }}>
+            <line x1="0" y1="46%" x2="100%" y2="49%" stroke="#fff" strokeWidth="7"/>
+            <line x1="0" y1="46%" x2="100%" y2="49%" stroke="#f4c542" strokeWidth="2.5"/>
+            <line x1="38%" y1="0" x2="41%" y2="100%" stroke="#fff" strokeWidth="6"/>
+            <line x1="38%" y1="0" x2="41%" y2="100%" stroke="#f4c542" strokeWidth="2"/>
+            <line x1="66%" y1="0" x2="68%" y2="100%" stroke="#fff" strokeWidth="4"/>
+          </svg>
+        </div>
+      )}
+      {base === "Masterplan" && (
+        <div className="absolute inset-0 bg-slate-50">
+          <div className="absolute inset-0 opacity-[0.07]" style={{ backgroundImage:"linear-gradient(rgba(0,0,0,.4) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,.4) 1px,transparent 1px)",backgroundSize:"48px 48px" }}/>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <svg width="72%" height="82%" viewBox="0 0 100 100" className="opacity-90">
+              <rect width="100" height="100" fill="#eef4fb" stroke="#3b82f6" strokeWidth="0.6"/>
+              <rect x="6" y="6" width="38" height="40" fill="#bfdbfe" stroke="#3b82f6" strokeWidth="0.5"/>
+              <rect x="56" y="6" width="38" height="40" fill="#bfdbfe" stroke="#3b82f6" strokeWidth="0.5"/>
+              <rect x="6" y="56" width="40" height="38" fill="#c7f9cc" stroke="#22c55e" strokeWidth="0.5"/>
+              <rect x="56" y="56" width="38" height="38" fill="#bfdbfe" stroke="#3b82f6" strokeWidth="0.5"/>
+              <circle cx="50" cy="50" r="7" fill="#fde68a" stroke="#f59e0b" strokeWidth="0.5"/>
+              <line x1="0" y1="50" x2="100" y2="50" stroke="#94a3b8" strokeWidth="1"/>
+              <line x1="50" y1="0" x2="50" y2="100" stroke="#94a3b8" strokeWidth="1"/>
+              <text x="50" y="96" textAnchor="middle" fontSize="3.5" fill="#64748b">{image.projectName}</text>
+            </svg>
+          </div>
+        </div>
+      )}
+      {showPolygon && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="border-2 border-primary bg-primary/10 relative" style={{ width:"52%",height:"56%" }}>
+            <div className="absolute -top-0.5 -left-0.5 w-3 h-3 border-t-2 border-l-2 border-primary"/>
+            <div className="absolute -top-0.5 -right-0.5 w-3 h-3 border-t-2 border-r-2 border-primary"/>
+            <div className="absolute -bottom-0.5 -left-0.5 w-3 h-3 border-b-2 border-l-2 border-primary"/>
+            <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 border-b-2 border-r-2 border-primary"/>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function FullscreenMapView({ image, initialBase }: { image: SatelliteImage; initialBase: DrawerBase }) {
+  const [base, setBase]               = useState<DrawerBase>(initialBase)
+  const [showPolygon, setShowPolygon] = useState(true)
+  const h = image.id.split("").reduce((a, c) => a + c.charCodeAt(0), 0)
+  const mbMonth = (h % 12) + 1; const mbYear = 2021 + (h % 3)
+  // Identical logic to ImageCard — pending images show requested date
+  const isPendingFull = image.capturingStatus === "Requested" || image.capturingStatus === "Queued"
+  const captionLabel = base === "Nawy Space"
+    ? isPendingFull
+      ? `Requested ${formatDateTime(image.requestedAt)}`
+      : `Captured ${formatDateTime(image.capturedAt)}`
+    : base === "Mapbox"
+    ? `Imagery © Mapbox · ${String(mbMonth).padStart(2,"0")} ${mbYear}`
+    : null
+  return (
+    <div className="relative h-[78vh]">
+      <MapBaseRenderer image={image} base={base} showPolygon={showPolygon} className="absolute inset-0 rounded-none" />
+      <div className="absolute top-3 right-3 z-20 flex flex-col items-end gap-2">
+        <div className="flex items-center gap-1 bg-white/95 rounded-lg px-1.5 py-1 shadow-lg backdrop-blur-sm">
+          {DRAWER_BASES.map((b) => (
+            <button key={b} onClick={() => setBase(b)}
+              className={cn("px-2.5 py-1 text-xs rounded-md font-medium transition-colors",
+                base === b ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted")}
+            >{b}</button>
+          ))}
+        </div>
+        <button onClick={() => setShowPolygon((v) => !v)}
+          className={cn("flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg font-medium shadow-lg backdrop-blur-sm transition-colors",
+            showPolygon ? "bg-primary text-primary-foreground" : "bg-white/95 text-muted-foreground hover:bg-white")}
+        >
+          <MapPin className="h-3.5 w-3.5" />Polygon
+        </button>
+      </div>
+      {/* ── Bottom-left metadata badge ── */}
+      <div className="absolute bottom-3 left-3 z-20 bg-black/65 text-white text-[11px] font-mono px-2.5 py-2 rounded-lg backdrop-blur-sm space-y-0.5">
+        {base === "Nawy Space" && <div className="text-white/50 text-[10px]">{image.id}</div>}
+        <div className="font-semibold">{image.projectName} — {image.areaName}</div>
+        {captionLabel && (
+          <div className="flex items-center gap-1.5 pt-0.5 text-white/60">
+            <CalendarRange className="h-3 w-3" />
+            <span>{captionLabel}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ImageCard({ image }: { image: SatelliteImage }) {
+  const [base, setBase]               = useState<DrawerBase>("Nawy Space")
+  const [showPolygon, setShowPolygon] = useState(true)
+  const [showFullscreen, setShowFullscreen] = useState(false)
+
+  const isPending = image.capturingStatus === "Requested" || image.capturingStatus === "Queued"
+  const h = image.id.split("").reduce((a, c) => a + c.charCodeAt(0), 0)
+  const mbMonth = (h % 12) + 1; const mbYear = 2021 + (h % 3)
+  // Same caption logic as FullscreenMapView — for pending Nawy Space show requested date
+  const captionLabel = base === "Nawy Space"
+    ? isPending
+      ? `Requested ${formatDateTime(image.requestedAt)}`
+      : `Captured ${formatDateTime(image.capturedAt)}`
+    : base === "Mapbox"
+    ? `Imagery © Mapbox · ${String(mbMonth).padStart(2,"0")} ${mbYear}`
+    : null
+
+  return (
+    <>
+      {/* All controls overlaid — same layout as FullscreenMapView, just h-52 */}
+      <div className="relative rounded-lg overflow-hidden">
+        {/* Nawy Space pending placeholder */}
+        {base === "Nawy Space" && isPending ? (
+          <div className="w-full h-52 bg-zinc-900 flex flex-col items-center justify-center gap-3 text-center px-6">
+            <Satellite className="h-10 w-10 text-zinc-500" />
+            <div>
+              <p className="text-sm font-semibold text-white/80">
+                {image.capturingStatus === "Queued" ? "Capture Queued" : "Capture Requested"}
+              </p>
+              <p className="text-[11px] text-zinc-500 mt-1">Satellite image will be available after the next pass</p>
+            </div>
+            <CapturingStatusBadge status={image.capturingStatus} />
+          </div>
+        ) : (
+          <MapBaseRenderer image={image} base={base} showPolygon={showPolygon} className="w-full h-52" />
+        )}
+
+        {/* Top-right: base switcher + polygon toggle (identical to fullscreen) */}
+        <div className="absolute top-2 right-2 z-20 flex flex-col items-end gap-1.5">
+          <div className="flex items-center gap-1 bg-white/95 rounded-lg px-1.5 py-1 shadow backdrop-blur-sm">
+            {DRAWER_BASES.map((b) => (
+              <button key={b} onClick={() => setBase(b)}
+                className={cn("px-2 py-0.5 text-[11px] rounded-md font-medium transition-colors",
+                  base === b ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted")}
+              >{b}</button>
+            ))}
+          </div>
+          <button onClick={() => setShowPolygon((v) => !v)}
+            className={cn("flex items-center gap-1 px-2 py-1 text-[11px] rounded-lg font-medium shadow backdrop-blur-sm transition-colors",
+              showPolygon ? "bg-primary text-primary-foreground" : "bg-white/95 text-muted-foreground hover:bg-white")}>
+            <MapPin className="h-3 w-3" />Polygon
+          </button>
+        </div>
+
+        {/* Bottom-left: identical content to FullscreenMapView, only position adjusted for smaller card */}
+        <div className="absolute bottom-2 left-2 z-20 bg-black/65 text-white text-[11px] font-mono px-2.5 py-2 rounded-lg backdrop-blur-sm space-y-0.5">
+          {base === "Nawy Space" && <div className="text-white/50 text-[10px]">{image.id}</div>}
+          <div className="font-semibold">{image.projectName} — {image.areaName}</div>
+          {captionLabel && (
+            <div className="flex items-center gap-1.5 pt-0.5 text-white/60">
+              <CalendarRange className="h-3 w-3" />
+              <span>{captionLabel}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Bottom-right: Fullscreen + Download */}
+        <div className="absolute bottom-2 right-2 z-10 flex items-center gap-1">
+          <button onClick={() => setShowFullscreen(true)}
+            className="h-7 w-7 rounded-md bg-black/55 hover:bg-black/75 text-white flex items-center justify-center backdrop-blur-sm transition-colors" title="Full Screen">
+            <Maximize2 className="h-3.5 w-3.5" />
+          </button>
+          <button className="h-7 w-7 rounded-md bg-black/55 hover:bg-black/75 text-white flex items-center justify-center backdrop-blur-sm transition-colors" title="Download">
+            <Download className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+      {showFullscreen && (
+        <Dialog open={showFullscreen} onOpenChange={(o) => !o && setShowFullscreen(false)}>
+          <DialogContent className="max-w-5xl w-[92vw] p-0 overflow-hidden rounded-xl">
+            <DialogTitle className="sr-only">{image.projectName} — Full Screen</DialogTitle>
+            <FullscreenMapView image={image} initialBase={base} />
+          </DialogContent>
+        </Dialog>
+      )}
+    </>
+  )
+}
+
+// ─── Construction Analysis Panel ─────────────────────────────────────────────
+
+function ConstructionAnalysisPanel({ image }: { image: SatelliteImage }) {
+  const data = CONSTRUCTION_ANALYSIS[image.id]
+
+  if (!data) return (
+    <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+      <BarChart3 className="h-8 w-8 text-muted-foreground/30" />
+      <p className="text-sm text-muted-foreground">No construction analysis available for this image.</p>
+    </div>
+  )
+
+  const cats: { key: keyof typeof data.categories; label: string }[] = [
+    { key: "siteInfrastructure", label: "Site & Infrastructure" },
+    { key: "structuralProgress",  label: "Structural Progress"  },
+    { key: "landscaping",         label: "Landscaping"          },
+    { key: "waterFeatures",       label: "Water Features"       },
+  ]
+
+  return (
+    <div className="space-y-5">
+      {/* ── Shared image card ── */}
+      <ImageCard image={image} />
+
+      <Separator />
+
+      {/* ── Overall Progress ── */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Overall Progress</span>
+          {data.delta && (
+            <Badge variant="outline" className={cn("text-[11px] font-medium", paceColor(data.delta.pace))}>
+              {data.delta.pace}
+            </Badge>
+          )}
+        </div>
+        <div className="flex items-end gap-3">
+          <span className="text-4xl font-bold tabular-nums leading-none">{data.overallPct}%</span>
+          {data.delta && (
+            <span className="text-sm text-green-600 font-semibold pb-1">
+              +{data.overallPct - data.delta.overallFrom} pts vs {data.delta.period.split("→")[0].trim()}
+            </span>
+          )}
+        </div>
+        <div className="relative h-3 rounded-full bg-muted overflow-hidden">
+          {data.delta && (
+            <div className="absolute h-full rounded-full bg-muted-foreground/20 transition-all"
+              style={{ width: `${data.delta.overallFrom}%` }} />
+          )}
+          <div
+            className={cn("absolute h-full rounded-full transition-all", progressColor(data.overallPct))}
+            style={{ width: `${data.overallPct}%` }}
+          />
+        </div>
+      </div>
+
+      {/* ── Category Progress Bars ── */}
+      <div className="space-y-3">
+        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Progress by Category</span>
+        {cats.map(({ key, label }) => {
+          const cat = data.categories[key]
+          return (
+            <div key={key} className="space-y-1">
+              <div className="flex items-center justify-between text-xs">
+                <span className="flex items-center gap-1.5 font-medium text-foreground">
+                  {label}
+                  {cat.driver && <span className="text-[9px] bg-primary/10 text-primary border border-primary/20 rounded px-1 py-0 font-semibold">Driver</span>}
+                </span>
+                <span className="flex items-center gap-2 tabular-nums">
+                  {cat.delta !== undefined && (
+                    <span className="text-green-600 text-[11px]">+{cat.delta}</span>
+                  )}
+                  <span className="font-semibold">{cat.pct}%</span>
+                  <span className="text-muted-foreground text-[10px] w-20 text-right">{catLabel(cat.pct)}</span>
+                </span>
+              </div>
+              <div className="relative h-2 rounded-full bg-muted overflow-hidden">
+                {cat.from !== undefined && (
+                  <div className="absolute h-full rounded-full bg-muted-foreground/20"
+                    style={{ width: `${cat.from}%` }} />
+                )}
+                <div
+                  className={cn("absolute h-full rounded-full transition-all",
+                    cat.pct >= 80 ? "bg-green-500" : cat.pct >= 50 ? "bg-blue-500" : cat.pct >= 20 ? "bg-amber-500" : "bg-red-400")}
+                  style={{ width: `${cat.pct}%` }}
+                />
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      <Separator />
+
+      {/* ── Qualitative Analysis ── */}
+      <div className="space-y-2">
+        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Qualitative Analysis</span>
+        <p className="text-sm text-foreground leading-relaxed">{data.qualitativeText}</p>
+      </div>
+
+      {/* ── Delta Analysis (if not first capture) ── */}
+      {data.delta && (
+        <>
+          <Separator />
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Delta Analysis</span>
+              <span className="text-[11px] text-muted-foreground">{data.delta.period} · {data.delta.days}d</span>
+            </div>
+
+            {/* Velocity metric */}
+            <div className="grid grid-cols-3 gap-2">
+              <div className="rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-center">
+                <p className="text-[10px] text-muted-foreground mb-0.5">Pts Gained</p>
+                <p className="text-base font-bold text-foreground tabular-nums">+{data.overallPct - data.delta.overallFrom}</p>
+              </div>
+              <div className="rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-center">
+                <p className="text-[10px] text-muted-foreground mb-0.5">Per Quarter</p>
+                <p className="text-base font-bold text-foreground tabular-nums">~{Math.round(data.delta.velocity * 91)}</p>
+              </div>
+              <div className="rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-center">
+                <p className="text-[10px] text-muted-foreground mb-0.5">Pace</p>
+                <Badge variant="outline" className={cn("text-[11px]", paceColor(data.delta.pace))}>{data.delta.pace}</Badge>
+              </div>
+            </div>
+
+            {/* Per-category delta table */}
+            <div className="rounded-lg border border-border overflow-hidden">
+              <table className="w-full text-xs">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="text-left px-3 py-2 font-medium text-muted-foreground">Category</th>
+                    <th className="text-right px-3 py-2 font-medium text-muted-foreground">
+                      {data.delta ? deltaToQuarters(data.delta.period).before : "Before"}
+                    </th>
+                    <th className="text-right px-3 py-2 font-medium text-muted-foreground">
+                      {data.delta ? deltaToQuarters(data.delta.period).after : "After"}
+                    </th>
+                    <th className="text-right px-3 py-2 font-medium text-muted-foreground">Δ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cats.map(({ key, label }) => {
+                    const cat = data.categories[key]
+                    return (
+                      <tr key={key} className="border-t border-border">
+                        <td className="px-3 py-2 font-medium text-foreground flex items-center gap-1">
+                          {label}
+                          {cat.driver && <span className="text-[9px] text-primary font-bold">↑</span>}
+                        </td>
+                        <td className="px-3 py-2 text-right text-muted-foreground tabular-nums">{cat.from ?? cat.pct}%</td>
+                        <td className="px-3 py-2 text-right font-semibold tabular-nums">{cat.pct}%</td>
+                        <td className={cn("px-3 py-2 text-right font-semibold tabular-nums", (cat.delta ?? 0) > 0 ? "text-green-600" : "text-muted-foreground")}>
+                          {cat.delta !== undefined ? `+${cat.delta}` : "—"}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                  <tr className="border-t-2 border-border bg-muted/20 font-semibold">
+                    <td className="px-3 py-2 text-foreground">Overall</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{data.delta.overallFrom}%</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{data.overallPct}%</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-green-600">+{data.overallPct - data.delta.overallFrom}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Delta narrative */}
+            <div className="rounded-lg border border-border bg-blue-50/50 dark:bg-blue-950/20 px-4 py-3">
+              <p className="text-xs text-foreground leading-relaxed">{data.delta.deltaSummary}</p>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 // ─── Capture: projects, cost model, recency window ───────────────────────────
 
 interface CaptureProject {
@@ -956,6 +1667,10 @@ const DATASET_NOW = (() => {
   const ts = SATELLITE_IMAGES.map((r) => new Date(r.capturedAt.split(" ")[0]).getTime())
   return Math.max(...ts)
 })()
+
+// Single consistent "Today" reference used across ALL timeline bars (session date = May 2026)
+// Using May 2026 showcases the "overdue" case for projects with past delivery dates
+const TIMELINE_TODAY_MS = new Date("2026-05-19").getTime()
 
 function qualityRank(q: ImageQuality) { return QUALITY_ORDER.indexOf(q) }
 
@@ -1283,7 +1998,7 @@ function ImagesTab() {
   // ── UI state ──
   const [page, setPage]                   = useState(1)
   const [detailRow, setDetailRow]         = useState<SatelliteImage | null>(null)
-  const [showMap, setShowMap]             = useState(false)
+  const [drawerTab, setDrawerTab]         = useState<"main" | "analysis">("main")
   const [archiveTarget, setArchiveTarget] = useState<SatelliteImage | "bulk" | null>(null)
   const [showCapture, setShowCapture]     = useState(false)
   const [visibleCols, setVisibleCols]     = useState<Set<string>>(new Set(ALL_COLUMNS.map((c) => c.id)))
@@ -1444,7 +2159,7 @@ function ImagesTab() {
           "border-b border-border cursor-pointer transition-colors group",
           isSel ? "bg-blue-50 dark:bg-blue-950/30 hover:bg-blue-100 dark:hover:bg-blue-950/50" : "hover:bg-muted/50",
         )}
-        onClick={() => setDetailRow(row)}
+        onClick={() => { setDetailRow(row); setDrawerTab("main") }}
       >
         {/* Checkbox — sticky left */}
         <td
@@ -1561,6 +2276,9 @@ function ImagesTab() {
         {vis("satellite") && (
           <td className="border-r border-border px-3 py-2.5"><SatelliteBadge satellite={row.satellite} /></td>
         )}
+        {vis("capturingStatus") && (
+          <td className="border-r border-border px-3 py-2.5"><CapturingStatusBadge status={row.capturingStatus} /></td>
+        )}
         {vis("createdAt") && (
           <td className="border-r border-border px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{formatDateTime(row.createdAt)}</td>
         )}
@@ -1580,7 +2298,7 @@ function ImagesTab() {
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setDetailRow(row)}>
+              <DropdownMenuItem onClick={() => { setDetailRow(row); setDrawerTab("main") }}>
                 <Eye className="h-4 w-4 mr-2" />View
               </DropdownMenuItem>
               <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => setArchiveTarget(row)}>
@@ -1888,8 +2606,9 @@ function ImagesTab() {
                 {vis("requested")    && colTh("Requested",      "requestedAt",     "min-w-[160px]")}
                 {vis("captured")     && colTh("Captured",       "capturedAt",      "min-w-[160px]")}
                 {vis("type")         && colTh("Type",           "type",            "min-w-[90px]")}
-                {vis("satellite")    && colTh("Satellite",      "satellite",       "min-w-[130px]")}
-                {vis("createdAt")    && <th className="bg-muted border-r border-border px-3 py-2 text-left text-xs font-medium text-muted-foreground min-w-[150px] whitespace-nowrap">Created At</th>}
+                {vis("satellite")        && colTh("Satellite",         "satellite",        "min-w-[130px]")}
+                {vis("capturingStatus") && colTh("Capturing Status",  "capturingStatus",  "min-w-[130px]")}
+                {vis("createdAt")       && <th className="bg-muted border-r border-border px-3 py-2 text-left text-xs font-medium text-muted-foreground min-w-[150px] whitespace-nowrap">Created At</th>}
                 {vis("updatedAt")    && <th className="bg-muted border-r border-border px-3 py-2 text-left text-xs font-medium text-muted-foreground min-w-[150px] whitespace-nowrap">Updated At</th>}
                 {/* Sticky right — action */}
                 <th className="bg-muted px-3 py-2 w-10 sticky right-0 z-30 shadow-[-6px_0_10px_-4px_rgba(0,0,0,0.18)]" />
@@ -2047,6 +2766,7 @@ function ImagesTab() {
           {detailRow && (() => {
             const selected = detailRow
             const area = convertArea(selected.totalAreaKm2)
+            const isPendingImg = selected.capturingStatus === "Requested" || selected.capturingStatus === "Queued"
             return (
               <>
                 {/* ── Header ── */}
@@ -2055,6 +2775,10 @@ function ImagesTab() {
                     <CopyId value={selected.id} className="font-semibold text-foreground text-xs" />
                     <QualityBadge quality={selected.quality} />
                     <TypeBadge type={selected.type} />
+                    <CapturingStatusBadge status={selected.capturingStatus} />
+                    <Badge variant="outline" className="text-[11px] font-medium bg-muted/50 text-muted-foreground border-border">
+                      {toQuarter(selected.capturedAt)}
+                    </Badge>
                   </div>
                   <div className="flex items-baseline gap-2 flex-wrap">
                     <SheetTitle className="text-base font-semibold leading-snug">
@@ -2071,23 +2795,44 @@ function ImagesTab() {
                   </p>
                 </SheetHeader>
 
+                {/* ── Tab switcher ── */}
+                <div className="flex shrink-0 border-b border-border px-6">
+                  {(["main","analysis"] as const).map((t) => (
+                    <button key={t} onClick={() => setDrawerTab(t)}
+                      className={cn(
+                        "py-2.5 px-1 mr-5 text-sm font-medium border-b-2 transition-colors",
+                        drawerTab === t
+                          ? "border-primary text-foreground"
+                          : "border-transparent text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {t === "main" ? "Main Info" : "Construction Analysis"}
+                    </button>
+                  ))}
+                </div>
+
                 <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
 
-                  {/* Image with floating action buttons (bottom-right) */}
-                  <div className="relative">
-                    <SatThumbnail image={selected} size="lg" />
-                    <div className="absolute bottom-2.5 right-2.5 flex items-center gap-1.5">
-                      <button className="h-8 w-8 rounded-md bg-black/55 hover:bg-black/75 text-white flex items-center justify-center backdrop-blur-sm transition-colors" title="Full Screen">
-                        <Maximize2 className="h-4 w-4" />
-                      </button>
-                      <button className="h-8 w-8 rounded-md bg-black/55 hover:bg-black/75 text-white flex items-center justify-center backdrop-blur-sm transition-colors" title="Download">
-                        <Download className="h-4 w-4" />
-                      </button>
-                      <button onClick={() => setShowMap(true)} className="h-8 w-8 rounded-md bg-black/55 hover:bg-black/75 text-white flex items-center justify-center backdrop-blur-sm transition-colors" title="View on Map">
-                        <Globe className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
+                  {drawerTab === "analysis" && (
+                    isPendingImg ? (
+                      <div className="flex flex-col items-center justify-center py-16 text-center gap-4">
+                        <div className="w-14 h-14 rounded-2xl bg-muted/40 flex items-center justify-center">
+                          <Satellite className="h-7 w-7 text-muted-foreground/40" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">No Analysis Available</p>
+                          <p className="text-xs text-muted-foreground mt-1 max-w-xs">Construction analysis will be generated after the satellite image is captured and processed.</p>
+                        </div>
+                        <CapturingStatusBadge status={selected.capturingStatus} />
+                      </div>
+                    ) : <ConstructionAnalysisPanel image={selected} />
+                  )}
+
+                  {drawerTab === "main" && (
+                  <div className="space-y-6">
+
+                  {/* Shared image card (Nawy Space / Mapbox / Masterplan + polygon toggle) */}
+                  <ImageCard image={selected} />
 
                   <Separator />
 
@@ -2114,7 +2859,7 @@ function ImagesTab() {
                       {[
                         { label: "GSD Range",    value: getZoomHeight(selected.satellite) },
                         { label: "Requested At", value: formatDateTime(selected.requestedAt) },
-                        { label: "Captured At",  value: formatDateTime(selected.capturedAt) },
+                        { label: "Captured At",  value: isPendingImg ? "—" : formatDateTime(selected.capturedAt) },
                         { label: "Created At",   value: formatDateTime(selected.createdAt) },
                         { label: "Updated At",   value: formatDateTime(selected.updatedAt) },
                       ].map(({ label, value }) => (
@@ -2185,21 +2930,28 @@ function ImagesTab() {
                     <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
                       <Activity className="h-3.5 w-3.5" />Imaging Metadata
                     </p>
-                    <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-                      {[
-                        { label: "Cloud Cover",      value: `${selected.metadata.cloudCoverPct}%` },
-                        { label: "Incidence Angle",  value: `${selected.metadata.incidenceAngle}°` },
-                        { label: "Sun Elevation",    value: `${selected.metadata.sunElevation}°` },
-                        { label: "Sun Azimuth",      value: `${selected.metadata.sunAzimuth}°` },
-                        { label: "Processing Level", value: selected.metadata.processingLevel },
-                        { label: "Available Bands",  value: selected.metadata.bandsAvailable.join(", ") },
-                      ].map(({ label, value }) => (
-                        <div key={label}>
-                          <p className="text-[10px] text-muted-foreground mb-0.5">{label}</p>
-                          <p className="text-sm font-medium">{value}</p>
-                        </div>
-                      ))}
-                    </div>
+                    {isPendingImg ? (
+                      <div className="flex items-center gap-3 rounded-lg border border-dashed border-border bg-muted/20 px-4 py-5 text-muted-foreground">
+                        <Activity className="h-5 w-5 opacity-30 shrink-0" />
+                        <p className="text-xs">Acquisition metadata will be available once the image is captured.</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                        {[
+                          { label: "Cloud Cover",      value: `${selected.metadata.cloudCoverPct}%` },
+                          { label: "Incidence Angle",  value: `${selected.metadata.incidenceAngle}°` },
+                          { label: "Sun Elevation",    value: `${selected.metadata.sunElevation}°` },
+                          { label: "Sun Azimuth",      value: `${selected.metadata.sunAzimuth}°` },
+                          { label: "Processing Level", value: selected.metadata.processingLevel },
+                          { label: "Available Bands",  value: selected.metadata.bandsAvailable.join(", ") },
+                        ].map(({ label, value }) => (
+                          <div key={label}>
+                            <p className="text-[10px] text-muted-foreground mb-0.5">{label}</p>
+                            <p className="text-sm font-medium">{value}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <Separator />
@@ -2249,157 +3001,14 @@ function ImagesTab() {
                     </div>
                   </div>
 
+                  </div>
+                  )}
                 </div>
               </>
             )
           })()}
         </SheetContent>
       </Sheet>
-
-      {/* ── View on Map dialog ── */}
-      {detailRow && showMap && (() => {
-        const img = detailRow
-        const isCoastal = img.areaName.includes("Sahel") || img.areaName.includes("Sokhna")
-        const isUrban   = img.areaName.includes("Cairo") || img.areaName.includes("October") || img.areaName.includes("Zayed")
-        const pal = isCoastal
-          ? { bg:"#1a4e6e", a:"#28728a", b:"#e8d9a0", c:"#2e8c66", d:"#4a9cb8" }
-          : isUrban
-          ? { bg:"#484858", a:"#8a9a88", b:"#c8c8b8", c:"#6a7868", d:"#9a9a8a" }
-          : { bg:"#2e5e3e", a:"#4e8a5e", b:"#d8cc8e", c:"#5a9a6a", d:"#7ab888" }
-        const h = img.id.split("").reduce((a, c) => a + c.charCodeAt(0), 0)
-        // Deterministic "Mapbox tile date" — older than capture (basemaps lag reality)
-        const mbMonth = (h % 12) + 1
-        const mbYear  = 2021 + (h % 3)
-        const mapboxTileDate = `${String(mbMonth).padStart(2, "0")} ${mbYear}`
-
-        type Base = "Masterplan" | "Nawy Space" | "Mapbox"
-        function MapView() {
-          const [base, setBase] = useState<Base>("Nawy Space")
-          const [showPolygon, setShowPolygon] = useState(true)
-
-          // bottom-right date label depends on active base
-          const dateLabel =
-            base === "Nawy Space" ? formatDateTime(img.capturedAt)
-            : base === "Mapbox"   ? mapboxTileDate
-            : null
-
-          return (
-            <div className="relative h-[78vh] overflow-hidden rounded-xl">
-              {/* ── Base: Nawy Space (our satellite capture) ── */}
-              {base === "Nawy Space" && (
-                <div className="absolute inset-0" style={{backgroundColor:pal.bg}}>
-                  <div className="absolute inset-0" style={{background:`linear-gradient(${h%360}deg,${pal.a}88 0%,${pal.b}55 35%,${pal.c}88 65%,${pal.d}44 100%)`}}/>
-                  <div className="absolute" style={{top:"8%",left:"8%",width:`${38+(h%15)}%`,height:`${32+(h%20)}%`,backgroundColor:pal.a,opacity:0.7}}/>
-                  <div className="absolute" style={{top:"8%",right:"8%",width:`${28+(h%20)}%`,height:`${42+(h%15)}%`,backgroundColor:pal.b,opacity:0.55}}/>
-                  <div className="absolute" style={{bottom:"12%",left:"12%",right:"12%",height:`${24+(h%15)}%`,backgroundColor:pal.c,opacity:0.6}}/>
-                  <div className="absolute inset-0 opacity-[0.05]" style={{backgroundImage:"linear-gradient(rgba(255,255,255,.8) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.8) 1px,transparent 1px)",backgroundSize:"56px 56px"}}/>
-                  <svg className="absolute inset-0 w-full h-full opacity-20" style={{pointerEvents:"none"}}>
-                    <line x1="0" y1="44%" x2="100%" y2="47%" stroke="white" strokeWidth="2"/>
-                    <line x1="36%" y1="0" x2="39%" y2="100%" stroke="white" strokeWidth="2"/>
-                    <line x1="64%" y1="0" x2="66%" y2="100%" stroke="white" strokeWidth="1"/>
-                    <line x1="0" y1="70%" x2="100%" y2="68%" stroke="white" strokeWidth="1"/>
-                  </svg>
-                </div>
-              )}
-
-              {/* ── Base: Mapbox (street basemap look) ── */}
-              {base === "Mapbox" && (
-                <div className="absolute inset-0" style={{backgroundColor:"#e8e6e1"}}>
-                  {/* green parks */}
-                  <div className="absolute rounded-lg" style={{top:"10%",left:"6%",width:"22%",height:"26%",backgroundColor:"#cfe3c0"}}/>
-                  <div className="absolute rounded-lg" style={{bottom:"14%",right:"10%",width:"26%",height:"30%",backgroundColor:"#cfe3c0"}}/>
-                  {/* water */}
-                  <div className="absolute" style={{top:"0",right:"0",width:"30%",height:"22%",backgroundColor:"#a9d4e5"}}/>
-                  {/* road network */}
-                  <svg className="absolute inset-0 w-full h-full" style={{pointerEvents:"none"}}>
-                    <line x1="0" y1="46%" x2="100%" y2="49%" stroke="#fff" strokeWidth="8"/>
-                    <line x1="0" y1="46%" x2="100%" y2="49%" stroke="#f4c542" strokeWidth="3"/>
-                    <line x1="38%" y1="0" x2="41%" y2="100%" stroke="#fff" strokeWidth="7"/>
-                    <line x1="38%" y1="0" x2="41%" y2="100%" stroke="#f4c542" strokeWidth="2.5"/>
-                    <line x1="66%" y1="0" x2="68%" y2="100%" stroke="#fff" strokeWidth="5"/>
-                    <line x1="0" y1="72%" x2="100%" y2="70%" stroke="#fff" strokeWidth="5"/>
-                    <line x1="0" y1="22%" x2="100%" y2="24%" stroke="#fff" strokeWidth="4"/>
-                  </svg>
-                  <div className="absolute inset-0 opacity-[0.04]" style={{backgroundImage:"linear-gradient(rgba(0,0,0,.4) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,.4) 1px,transparent 1px)",backgroundSize:"60px 60px"}}/>
-                </div>
-              )}
-
-              {/* ── Base: Masterplan (vector plan) ── */}
-              {base === "Masterplan" && (
-                <div className="absolute inset-0 bg-slate-50">
-                  <div className="absolute inset-0 opacity-[0.07]" style={{backgroundImage:"linear-gradient(rgba(0,0,0,.4) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,.4) 1px,transparent 1px)",backgroundSize:"48px 48px"}}/>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <svg width="70%" height="80%" viewBox="0 0 100 100" className="opacity-90">
-                      <rect width="100" height="100" fill="#eef4fb" stroke="#3b82f6" strokeWidth="0.6"/>
-                      <rect x="6" y="6" width="38" height="40" fill="#bfdbfe" stroke="#3b82f6" strokeWidth="0.5"/>
-                      <rect x="56" y="6" width="38" height="40" fill="#bfdbfe" stroke="#3b82f6" strokeWidth="0.5"/>
-                      <rect x="6" y="56" width="40" height="38" fill="#c7f9cc" stroke="#22c55e" strokeWidth="0.5"/>
-                      <rect x="56" y="56" width="38" height="38" fill="#bfdbfe" stroke="#3b82f6" strokeWidth="0.5"/>
-                      <circle cx="50" cy="50" r="7" fill="#fde68a" stroke="#f59e0b" strokeWidth="0.5"/>
-                      <line x1="0" y1="50" x2="100" y2="50" stroke="#94a3b8" strokeWidth="1"/>
-                      <line x1="50" y1="0" x2="50" y2="100" stroke="#94a3b8" strokeWidth="1"/>
-                    </svg>
-                  </div>
-                </div>
-              )}
-
-              {/* ── Polygon (boundary) overlay ── */}
-              {showPolygon && (
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="border-2 border-red-500 bg-red-500/10 relative" style={{width:"54%",height:"60%"}}>
-                    <div className="absolute -top-0.5 -left-0.5 w-4 h-4 border-t-2 border-l-2 border-red-500"/>
-                    <div className="absolute -top-0.5 -right-0.5 w-4 h-4 border-t-2 border-r-2 border-red-500"/>
-                    <div className="absolute -bottom-0.5 -left-0.5 w-4 h-4 border-b-2 border-l-2 border-red-500"/>
-                    <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 border-b-2 border-r-2 border-red-500"/>
-                    <span className="absolute -top-6 left-0 text-[11px] font-medium text-red-600 bg-white/90 px-1.5 py-0.5 rounded">{img.projectName}</span>
-                  </div>
-                </div>
-              )}
-
-              {/* ── Controls top-right ── */}
-              <div className="absolute top-3 right-3 z-20 flex flex-col items-end gap-2">
-                {/* Base layer single-select */}
-                <div className="flex items-center gap-1 bg-white/95 rounded-lg px-1.5 py-1 shadow-lg backdrop-blur-sm">
-                  {(["Masterplan","Nawy Space","Mapbox"] as Base[]).map((b) => (
-                    <button key={b} onClick={() => setBase(b)}
-                      className={cn("px-2.5 py-1 text-xs rounded-md font-medium transition-colors",
-                        base === b ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted")}
-                    >{b}</button>
-                  ))}
-                </div>
-                {/* Polygon toggle (independent) — under the base switcher, blue when active */}
-                <button
-                  onClick={() => setShowPolygon((v) => !v)}
-                  className={cn("flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg font-medium shadow-lg backdrop-blur-sm transition-colors",
-                    showPolygon ? "bg-primary text-primary-foreground" : "bg-white/95 text-muted-foreground hover:bg-white")}
-                >
-                  <MapPin className="h-3.5 w-3.5" />Polygon
-                </button>
-              </div>
-
-              {/* ── Info badge bottom-left ── */}
-              <div className="absolute bottom-3 left-3 z-20 bg-black/65 text-white text-[11px] font-mono px-2.5 py-2 rounded-lg backdrop-blur-sm space-y-0.5">
-                <div className="font-semibold">{base === "Mapbox" ? img.projectName : `${img.id} · ${img.projectName}`}</div>
-                <div className="text-white/70">{img.metadata.bboxMinLat.toFixed(4)}°N {img.metadata.bboxMinLng.toFixed(4)}°E → {img.metadata.bboxMaxLat.toFixed(4)}°N {img.metadata.bboxMaxLng.toFixed(4)}°E</div>
-                {dateLabel && (
-                  <div className="flex items-center gap-1.5 pt-1 mt-1 border-t border-white/20">
-                    <CalendarRange className="h-3 w-3 text-white/60" />
-                    <span>{base === "Mapbox" ? `Imagery © Mapbox · ${dateLabel}` : `Captured ${dateLabel}`}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )
-        }
-        return (
-          <Dialog open={showMap} onOpenChange={(o)=>!o&&setShowMap(false)}>
-            <DialogContent className="max-w-5xl w-[92vw] p-0 overflow-hidden rounded-xl">
-              <DialogTitle className="sr-only">{img.projectName} — Map View</DialogTitle>
-              <MapView />
-            </DialogContent>
-          </Dialog>
-        )
-      })()}
 
       {/* ── Capture New dialog ── */}
       <CaptureDialog
@@ -2442,20 +3051,865 @@ function ImagesTab() {
   )
 }
 
-// ─── Construction Analysis Tab ─────────────────────────────────────────────────
+// ─── Project timeline metadata (launch + delivery window) ────────────────────
+
+interface ProjectMeta {
+  launchStartDate: string   // when physical construction/site work began
+  launchEndDate:   string   // when the public launch/marketing event ended
+  createdAt:       string   // when registered in IMS
+  deliveryMin:     string
+  deliveryMax:     string
+}
+
+const PROJECT_METADATA: Record<string, ProjectMeta> = {
+  "PJ-0124": { launchStartDate: "2020-11-15", launchEndDate: "2021-02-15", createdAt: "2021-03-15", deliveryMin: "2027-06-01", deliveryMax: "2028-03-01" }, // Palm Hills October
+  "PJ-0055": { launchStartDate: "2020-02-01", launchEndDate: "2020-05-01", createdAt: "2020-06-01", deliveryMin: "2026-09-01", deliveryMax: "2027-06-01" }, // Marassi
+  "PJ-0088": { launchStartDate: "2022-05-01", launchEndDate: "2022-08-01", createdAt: "2022-09-01", deliveryMin: "2027-12-01", deliveryMax: "2028-09-01" }, // Allegria
+  "PJ-0201": { launchStartDate: "2021-11-01", launchEndDate: "2022-02-01", createdAt: "2022-03-01", deliveryMin: "2027-06-01", deliveryMax: "2028-03-01" }, // Hyde Park Estate
+  "PJ-0312": { launchStartDate: "2021-02-01", launchEndDate: "2021-05-01", createdAt: "2021-06-01", deliveryMin: "2027-03-01", deliveryMax: "2027-12-01" }, // MV iCity
+  "PJ-0441": { launchStartDate: "2022-02-01", launchEndDate: "2022-05-01", createdAt: "2022-06-01", deliveryMin: "2027-12-01", deliveryMax: "2028-09-01" }, // Silversands
+  "PJ-0522": { launchStartDate: "2022-05-01", launchEndDate: "2022-08-01", createdAt: "2022-09-01", deliveryMin: "2028-03-01", deliveryMax: "2028-12-01" }, // Fouka Bay
+  "PJ-0610": { launchStartDate: "2022-11-01", launchEndDate: "2023-02-01", createdAt: "2023-03-01", deliveryMin: "2028-06-01", deliveryMax: "2029-03-01" }, // ZED
+  "PJ-0711": { launchStartDate: "2019-11-01", launchEndDate: "2020-02-01", createdAt: "2020-03-01", deliveryMin: "2025-09-01", deliveryMax: "2026-06-01" }, // Villette (near delivery!)
+  "PJ-0802": { launchStartDate: "2022-02-01", launchEndDate: "2022-05-01", createdAt: "2022-06-01", deliveryMin: "2027-09-01", deliveryMax: "2028-06-01" }, // Palm Hills New Cairo
+  "PJ-0901": { launchStartDate: "2019-09-01", launchEndDate: "2019-12-01", createdAt: "2020-01-01", deliveryMin: "2025-06-01", deliveryMax: "2025-12-01" }, // Telal El Sokhna (almost done)
+  "PJ-1002": { launchStartDate: "2021-02-01", launchEndDate: "2021-05-01", createdAt: "2021-06-01", deliveryMin: "2027-06-01", deliveryMax: "2028-03-01" }, // Badya
+  "PJ-1105": { launchStartDate: "2021-11-01", launchEndDate: "2022-02-01", createdAt: "2022-03-01", deliveryMin: "2027-12-01", deliveryMax: "2028-09-01" }, // Sarai
+  "PJ-1204": { launchStartDate: "2022-11-01", launchEndDate: "2023-02-01", createdAt: "2023-03-01", deliveryMin: "2028-06-01", deliveryMax: "2029-03-01" }, // La Vista Gardens
+  "PJ-1310": { launchStartDate: "2022-02-01", launchEndDate: "2022-05-01", createdAt: "2022-06-01", deliveryMin: "2026-12-01", deliveryMax: "2027-09-01" }, // The Lake
+  "PJ-1408": { launchStartDate: "2021-05-01", launchEndDate: "2021-08-01", createdAt: "2021-09-01", deliveryMin: "2027-03-01", deliveryMax: "2027-12-01" }, // Uptown Cairo
+  "PJ-1510": { launchStartDate: "2022-05-01", launchEndDate: "2022-08-01", createdAt: "2022-09-01", deliveryMin: "2028-06-01", deliveryMax: "2029-03-01" }, // Riviera
+  "PJ-1612": { launchStartDate: "2022-08-01", launchEndDate: "2022-11-01", createdAt: "2022-12-01", deliveryMin: "2028-03-01", deliveryMax: "2028-12-01" }, // Eastown
+  "PJ-1711": { launchStartDate: "2021-11-01", launchEndDate: "2022-02-01", createdAt: "2022-03-01", deliveryMin: "2027-09-01", deliveryMax: "2028-06-01" }, // O West
+  "PJ-1808": { launchStartDate: "2021-05-01", launchEndDate: "2021-08-01", createdAt: "2021-09-01", deliveryMin: "2027-06-01", deliveryMax: "2028-03-01" }, // MV October
+}
+
+// ─── Project Timeline Bar ─────────────────────────────────────────────────────
+
+type RiskLevel = "on-track" | "watch" | "behind" | "critical"
+
+function riskLabel(r: RiskLevel) {
+  if (r === "critical") return { text: "Critical", color: "bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400" }
+  if (r === "behind")   return { text: "Behind Schedule", color: "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400" }
+  if (r === "watch")    return { text: "Watch", color: "bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400" }
+  return { text: "On Track", color: "bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400" }
+}
+
+function ProjectTimelineBar({
+  meta, captureDate, overallPct, compact = false,
+}: {
+  meta: ProjectMeta; captureDate: string; overallPct: number; compact?: boolean
+}) {
+  // ── Dates ──
+  const tsLaunchStart = new Date(meta.launchStartDate).getTime()
+  const tsLaunchEnd   = new Date(meta.launchEndDate).getTime()
+  const tsCreated     = new Date(meta.createdAt).getTime()
+  const tsToday       = TIMELINE_TODAY_MS
+  const tsDMin        = new Date(meta.deliveryMin).getTime()
+  const tsDMax        = new Date(meta.deliveryMax).getTime()
+
+  const isOverdue = tsToday > tsDMax
+
+  // Bar spans: launchStart → max(dMax, today)
+  const barStart = tsLaunchStart
+  const barEnd   = Math.max(tsDMax, tsToday)
+  const span     = barEnd - barStart
+  const pos      = (ts: number) => Math.round(Math.max(0, Math.min(100, ((ts - barStart) / span) * 100)))
+
+  const todayPct   = pos(tsToday)
+  const dMinPct    = pos(tsDMin)
+  const dMaxPct    = pos(tsDMax)
+  const createdPct = pos(tsCreated)
+  const lEndPct    = pos(tsLaunchEnd)
+
+  const msToMin    = tsDMin - tsToday
+  const monthsLeft = Math.round(msToMin / (30 * 864e5))
+
+  const gap       = todayPct - overallPct
+  const fillColor =
+    isOverdue && overallPct < 95 ? "bg-red-600"   :
+    gap > 20                      ? "bg-red-500"   :
+    gap > 10                      ? "bg-amber-500" :
+    gap > 0                       ? "bg-yellow-400":
+    "bg-green-500"
+
+  const risk: RiskLevel =
+    isOverdue && overallPct < 95          ? "critical" :
+    (monthsLeft < 6  && overallPct < 80) ? "critical" :
+    (monthsLeft < 12 && overallPct < 60) ? "critical" :
+    (monthsLeft < 12 && gap > 15)        ? "behind"   :
+    (gap > 20)                            ? "behind"   :
+    (gap > 10)                            ? "watch"    :
+    "on-track"
+  const rl = riskLabel(risk)
+
+  const MN  = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+  const fmt = (ts: number) => { const d = new Date(ts); return `${MN[d.getMonth()]} '${String(d.getFullYear()).slice(2)}` }
+
+  const allMarkers = [
+    { pct: 0,          date: fmt(tsLaunchStart), name: "Launch Start", isToday: false },
+    { pct: lEndPct,    date: fmt(tsLaunchEnd),   name: "Launch End",   isToday: false },
+    { pct: createdPct, date: fmt(tsCreated),     name: "Created At",   isToday: false },
+    { pct: todayPct,   date: fmt(tsToday),       name: "Today",        isToday: true  },
+    { pct: dMinPct,    date: fmt(tsDMin),        name: "Min Delivery", isToday: false },
+    { pct: dMaxPct,    date: fmt(tsDMax),        name: "Max Delivery", isToday: false },
+  ]
+
+  // Remove markers within 3% of an already-kept one (keep first / more important)
+  const deduped = allMarkers.filter((m, i, arr) =>
+    !arr.slice(0, i).some(prev => Math.abs(prev.pct - m.pct) < 3)
+  )
+  const markers = compact
+    ? deduped.filter(m => m.pct === 0 || m.isToday || m.pct === dMinPct || m.pct === dMaxPct)
+    : deduped
+
+  const safeLeft = (pct: number) => Math.min(96, Math.max(2, pct))
+  const anchor   = (pct: number) => pct < 5 ? "none" : pct > 95 ? "translateX(-100%)" : "translateX(-50%)"
+
+  return (
+    <div className="space-y-1">
+      <div className="relative" style={{ marginTop: "14px", paddingBottom: compact ? "30px" : "42px" }}>
+
+        {/* Overdue zone: faint red background from dMax → today */}
+        {isOverdue && (
+          <div className="absolute top-0 h-full rounded-r-sm" style={{
+            left: `${dMaxPct}%`, right: "0",
+            background: "rgba(239,68,68,0.07)",
+          }} />
+        )}
+
+        {/* Bar track */}
+        <div className="h-1.5 rounded-full bg-muted relative overflow-visible">
+          {/* Construction progress fill */}
+          <div className={cn("absolute left-0 top-0 h-full rounded-full", fillColor)} style={{ width: `${overallPct}%` }} />
+        </div>
+
+        {/* Dotted tick lines (extend above and below bar) */}
+        {markers.map((m, i) => (
+          <div key={i} className="absolute" style={{
+            left: `${m.pct}%`, top: "-6px",
+            height: "14px", width: "0",
+            borderLeft: m.isToday
+              ? "2px solid hsl(var(--foreground))"
+              : isOverdue && m.pct === dMaxPct
+              ? "2px dashed rgba(239,68,68,0.7)"
+              : "1.5px dashed hsl(var(--muted-foreground) / 0.45)",
+          }} />
+        ))}
+
+        {/* Today filled dot */}
+        <div className="absolute rounded-full z-10" style={{
+          left: `${todayPct}%`, top: "50%",
+          width: "9px", height: "9px",
+          transform: "translate(-50%, -55%)",
+          background: isOverdue ? "rgb(239,68,68)" : "hsl(var(--foreground))",
+          border: "1.5px solid hsl(var(--background))",
+        }} />
+
+        {/* Construction % — above bar near fill edge */}
+        {overallPct > 3 && (
+          <div className="absolute text-[8px] font-bold tabular-nums leading-none" style={{
+            left: `${safeLeft(overallPct)}%`,
+            bottom: "calc(100% + 9px)",
+            transform: anchor(overallPct),
+            opacity: 0.8,
+          }}>
+            {overallPct}% built
+          </div>
+        )}
+
+        {/* Today % — shown ABOVE bar, clearly separate from labels below */}
+        <div className="absolute text-[9px] font-bold tabular-nums leading-none" style={{
+          left: `${safeLeft(todayPct)}%`,
+          bottom: "calc(100% + 9px)",
+          transform: anchor(todayPct),
+          color: isOverdue ? "rgb(239,68,68)" : "hsl(var(--foreground))",
+          marginLeft: Math.abs(todayPct - overallPct) < 10 ? (todayPct > overallPct ? "20px" : "-20px") : "0",
+        }}>
+          {todayPct}% →
+        </div>
+
+        {/* Labels below bar — alternating rows to prevent overlap */}
+        {markers.map((m, i) => (
+          <div key={i} className="absolute flex flex-col items-center" style={{
+            left:      `${safeLeft(m.pct)}%`,
+            top:       `${10 + (i % 2 === 0 ? 0 : 12)}px`,
+            transform: anchor(m.pct),
+          }}>
+            <span className={cn("text-[9px] font-medium leading-tight whitespace-nowrap tabular-nums",
+              m.isToday
+                ? isOverdue ? "text-red-600 dark:text-red-400 font-bold" : "text-foreground font-bold"
+                : isOverdue && m.pct === dMaxPct ? "text-red-400"
+                : "text-muted-foreground",
+            )}>
+              {m.date}
+            </span>
+            {!compact && (
+              <span className="text-[7px] leading-none whitespace-nowrap text-muted-foreground/50">{m.name}</span>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <Badge variant="outline" className={cn(compact ? "text-[9px] px-1 py-0" : "text-[10px] px-1.5 py-0", rl.color)}>
+          {isOverdue ? "⚠ Overdue" : rl.text}
+        </Badge>
+        <span className={cn("text-muted-foreground tabular-nums", compact ? "text-[10px]" : "text-[11px]")}>
+          {isOverdue ? `${Math.abs(monthsLeft)}mo past delivery` : `${monthsLeft}mo to delivery`}
+        </span>
+        <span className={cn("font-medium tabular-nums", compact ? "text-[10px]" : "text-[11px]",
+          gap > 5 ? "text-amber-600" : gap < -5 ? "text-green-600" : "text-muted-foreground")}>
+          {gap > 5 ? `−${gap}pts vs timeline` : gap < -5 ? `+${Math.abs(gap)}pts ahead` : "~on pace"}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+// ─── Construction Analysis Tab — types & helpers ─────────────────────────────
+
+interface ProjectGroup {
+  projectId:    string
+  projectName:  string
+  developer:    DeveloperInfo
+  areaId:       string
+  areaName:     string
+  subAreaName:  string
+  phaseId:      string
+  phaseName:    string
+  images:       SatelliteImage[]   // sorted oldest → newest
+  latestAnalysis: ConstructionSnapshot | null
+  district:     string
+}
+
+function deriveDistrict(areaName: string): string {
+  if (areaName === "New Cairo")          return "Greater Cairo"
+  if (areaName === "6th of October" || areaName === "Sheikh Zayed") return "West Cairo"
+  if (areaName === "Sahel")              return "North Coast"
+  if (areaName === "Ain Sokhna")         return "Red Sea Coast"
+  return areaName
+}
+
+function generateFullStory(group: ProjectGroup): string {
+  const latest   = group.images[group.images.length - 1]
+  const analysis = group.latestAnalysis
+  if (!analysis) return "No construction analysis data available for this project."
+  const date     = formatDateTime(latest.capturedAt)
+  let story = `As of ${date}, ${group.projectName} (${group.phaseName}) records ${analysis.overallPct}% overall construction progress. ${analysis.qualitativeText}`
+  if (analysis.delta) story += ` ${analysis.delta.deltaSummary}`
+  if (group.images.length === 1) story += " This is the first recorded satellite capture for this project. Future captures will enable longitudinal progress tracking and velocity analysis."
+  return story
+}
+
+// Derive all project groups once (module-level, stable)
+const PROJECT_GROUPS: ProjectGroup[] = (() => {
+  const map = new Map<string, ProjectGroup>()
+  for (const img of SATELLITE_IMAGES) {
+    if (!map.has(img.projectId)) {
+      map.set(img.projectId, {
+        projectId: img.projectId, projectName: img.projectName,
+        developer: img.developer,
+        areaId: img.areaId, areaName: img.areaName, subAreaName: img.subAreaName,
+        phaseId: img.phaseId, phaseName: img.phaseName,
+        images: [], latestAnalysis: null,
+        district: deriveDistrict(img.areaName),
+      })
+    }
+    map.get(img.projectId)!.images.push(img)
+  }
+  for (const g of map.values()) {
+    g.images.sort((a, b) => a.capturedAt.localeCompare(b.capturedAt))
+    const latest = g.images[g.images.length - 1]
+    g.latestAnalysis = CONSTRUCTION_ANALYSIS[latest.id] ?? null
+  }
+  return Array.from(map.values()).sort((a, b) => a.projectName.localeCompare(b.projectName))
+})()
+
+const CAT_LABELS: { key: "siteInfrastructure" | "structuralProgress" | "landscaping" | "waterFeatures"; label: string }[] = [
+  { key: "siteInfrastructure", label: "Site & Infrastructure" },
+  { key: "structuralProgress",  label: "Structural Progress"  },
+  { key: "landscaping",         label: "Landscaping"          },
+  { key: "waterFeatures",       label: "Water Features"       },
+]
+
+// ─── Project Drawer ───────────────────────────────────────────────────────────
+
+function ConstructionProjectDrawer({
+  group, open, onClose, onViewImage,
+}: {
+  group: ProjectGroup | null; open: boolean; onClose: () => void; onViewImage: (img: SatelliteImage) => void
+}) {
+  const a = group?.latestAnalysis
+  const latest = group ? group.images[group.images.length - 1] : null
+
+  return (
+    <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
+      <SheetContent className="w-[640px] sm:max-w-[640px] flex flex-col p-0">
+        {group && (
+          <>
+            <SheetHeader className="px-6 py-4 border-b border-border shrink-0 space-y-1.5">
+              <div className="flex items-center gap-2 flex-wrap">
+                <CopyId value={group.projectId} className="font-semibold text-foreground text-xs" />
+                <AreaTag areaName={group.areaName} />
+              </div>
+              <SheetTitle className="text-base font-semibold">{group.projectName}</SheetTitle>
+              <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
+                <span>{group.developer.name}</span>
+                <span>·</span>
+                <span>{group.phaseName}</span>
+                {group.subAreaName && <><span>·</span><span>{group.subAreaName}</span></>}
+              </div>
+              {latest && PROJECT_METADATA[group.projectId] && (
+                <div className="pt-1">
+                  <ProjectTimelineBar
+                    meta={PROJECT_METADATA[group.projectId]}
+                    captureDate={latest.capturedAt}
+                    overallPct={a?.overallPct ?? 0}
+                  />
+                </div>
+              )}
+            </SheetHeader>
+
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+
+              {/* ── Latest image card ── */}
+              {latest && <ImageCard image={latest} />}
+
+              {/* ── Current Progress ── */}
+              {a && (
+                <>
+                  <Separator />
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Current Progress</p>
+                      {a.delta && <Badge variant="outline" className={cn("text-[11px]", paceColor(a.delta.pace))}>{a.delta.pace}</Badge>}
+                    </div>
+                    <div className="flex items-end gap-3">
+                      <span className="text-4xl font-bold tabular-nums">{a.overallPct}%</span>
+                      {a.delta && <span className="text-sm text-green-600 font-semibold pb-1">+{a.overallPct - a.delta.overallFrom} pts vs {a.delta.period.split("→")[0].trim()}</span>}
+                    </div>
+                    <div className="relative h-2.5 rounded-full bg-muted overflow-hidden">
+                      {a.delta && <div className="absolute h-full rounded-full bg-muted-foreground/20" style={{ width:`${a.delta.overallFrom}%` }} />}
+                      <div className={cn("absolute h-full rounded-full", progressColor(a.overallPct))} style={{ width:`${a.overallPct}%` }} />
+                    </div>
+                    <div className="space-y-2.5">
+                      {CAT_LABELS.map(({ key, label }) => {
+                        const cat = a.categories[key]
+                        return (
+                          <div key={key} className="space-y-1">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="flex items-center gap-1.5 font-medium">
+                                {label}
+                                {cat.driver && <span className="text-[9px] bg-primary/10 text-primary border border-primary/20 rounded px-1 py-0 font-semibold">Driver</span>}
+                              </span>
+                              <span className="flex items-center gap-2 tabular-nums">
+                                {cat.delta !== undefined && <span className="text-green-600 text-[11px]">+{cat.delta}</span>}
+                                <span className="font-semibold">{cat.pct}%</span>
+                                <span className="text-muted-foreground text-[10px] w-18 text-right">{catLabel(cat.pct)}</span>
+                              </span>
+                            </div>
+                            <div className="relative h-1.5 rounded-full bg-muted overflow-hidden">
+                              {cat.from !== undefined && <div className="absolute h-full rounded-full bg-muted-foreground/20" style={{ width:`${cat.from}%` }} />}
+                              <div className={cn("absolute h-full rounded-full", cat.pct >= 80 ? "bg-green-500" : cat.pct >= 50 ? "bg-blue-500" : cat.pct >= 20 ? "bg-amber-500" : "bg-red-400")} style={{ width:`${cat.pct}%` }} />
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              <Separator />
+
+              {/* ── Full Story ── */}
+              <div className="space-y-2">
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Full Story</p>
+                <p className="text-sm text-foreground leading-relaxed">{generateFullStory(group)}</p>
+              </div>
+
+              <Separator />
+
+              {/* ── Capture Timeline ── */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Capture Timeline</p>
+                  <span className="text-[11px] text-muted-foreground">{group.images.length} capture{group.images.length > 1 ? "s" : ""}</span>
+                </div>
+                <div className="space-y-2">
+                  {[...group.images].reverse().map((img, i) => {
+                    const imgAnalysis = CONSTRUCTION_ANALYSIS[img.id]
+                    const isLatest = i === 0
+                    return (
+                      <div
+                        key={img.id}
+                        className="rounded-lg border border-border bg-card hover:bg-muted/30 cursor-pointer transition-colors p-3"
+                        onClick={() => onViewImage(img)}
+                      >
+                        <div className="flex items-start gap-3">
+                          {/* Timeline dot */}
+                          <div className="flex flex-col items-center mt-1">
+                            <div className={cn("w-2.5 h-2.5 rounded-full flex-shrink-0", isLatest ? "bg-primary" : "bg-muted-foreground/40")} />
+                            {i < group.images.length - 1 && <div className="w-px flex-1 min-h-4 bg-border mt-1" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2 mb-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-mono text-muted-foreground">{img.id}</span>
+                                {isLatest && <Badge variant="outline" className="text-[9px] px-1 py-0 border-primary text-primary">Latest</Badge>}
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <QualityBadge quality={img.quality} />
+                                <TypeBadge type={img.type} />
+                              </div>
+                            </div>
+                            <div className="text-[11px] text-muted-foreground mb-2">{formatDateTime(img.capturedAt)} · {img.systemRequested}</div>
+                            {imgAnalysis && (
+                              <div className="flex items-center gap-3">
+                                <span className="text-sm font-bold tabular-nums">{imgAnalysis.overallPct}%</span>
+                                {imgAnalysis.delta && (
+                                  <span className="text-[11px] text-green-600 font-medium">+{imgAnalysis.overallPct - imgAnalysis.delta.overallFrom} pts</span>
+                                )}
+                                <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden max-w-[120px]">
+                                  <div className={cn("h-full rounded-full", progressColor(imgAnalysis.overallPct))}
+                                    style={{ width:`${imgAnalysis.overallPct}%` }} />
+                                </div>
+                                {imgAnalysis.delta && (
+                                  <Badge variant="outline" className={cn("text-[9px] px-1 py-0", paceColor(imgAnalysis.delta.pace))}>{imgAnalysis.delta.pace}</Badge>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <Eye className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0 mt-1" />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+            </div>
+          </>
+        )}
+      </SheetContent>
+    </Sheet>
+  )
+}
+
+// ─── Construction Analysis Tab ────────────────────────────────────────────────
 
 function ConstructionAnalysisTab() {
+  // ── Filter state ──
+  const [search, setSearch]               = useState("")
+  const [districtFilter, setDistrict]     = useState<Set<string>>(new Set())
+  const [areaFilter, setArea]             = useState<Set<string>>(new Set())
+  const [projectFilter, setProject]       = useState<Set<string>>(new Set())
+  const [dateFrom, setDateFrom]           = useState("")
+  const [dateTo, setDateTo]               = useState("")
+  // ── UI state ──
+  const [expandedIds, setExpanded]        = useState<Set<string>>(new Set())
+  const [drawerGroup, setDrawerGroup]     = useState<ProjectGroup | null>(null)
+  const [detailImage, setDetailImage]     = useState<SatelliteImage | null>(null)
+  const [detailTab, setDetailTab]         = useState<"main" | "analysis">("main")
+
+  // ── Unique filter options ──
+  const uniqueDistricts = useMemo(() => Array.from(new Set(PROJECT_GROUPS.map(g => g.district))).sort(), [])
+  const uniqueAreas     = useMemo(() => Array.from(new Set(PROJECT_GROUPS.map(g => g.areaName))).sort(), [])
+  const uniqueProjects  = useMemo(() => PROJECT_GROUPS.map(g => ({ id: g.projectId, name: g.projectName })).sort((a,b) => a.name.localeCompare(b.name)), [])
+
+  // ── Filter groups ──
+  const filtered = useMemo(() => {
+    return PROJECT_GROUPS.filter(g => {
+      const q = search.toLowerCase()
+      if (search && !g.projectName.toLowerCase().includes(q) && !g.projectId.toLowerCase().includes(q)) return false
+      if (districtFilter.size > 0 && !districtFilter.has(g.district)) return false
+      if (areaFilter.size > 0 && !areaFilter.has(g.areaName)) return false
+      if (projectFilter.size > 0 && !projectFilter.has(g.projectId)) return false
+      if (dateFrom || dateTo) {
+        const inRange = g.images.some(img => {
+          const d = img.capturedAt.split(" ")[0]
+          if (dateFrom && d < dateFrom) return false
+          if (dateTo   && d > dateTo)   return false
+          return true
+        })
+        if (!inRange) return false
+      }
+      return true
+    })
+  }, [search, districtFilter, areaFilter, projectFilter, dateFrom, dateTo])
+
+  const hasFilter = !!(search || districtFilter.size || areaFilter.size || projectFilter.size || dateFrom || dateTo)
+  const clearFilters = () => {
+    setSearch(""); setDistrict(new Set()); setArea(new Set()); setProject(new Set())
+    setDateFrom(""); setDateTo("")
+  }
+
+  // ── Analytics (same 6 cards as Images tab) ──
+  const filteredImages      = useMemo(() => filtered.flatMap(g => g.images), [filtered])
+  const totalAreaCaptured   = useMemo(() => filteredImages.reduce((s, r) => s + r.areaCapturedKm2, 0), [filteredImages])
+  const totalProjectArea    = useMemo(() => filteredImages.reduce((s, r) => s + r.totalAreaKm2, 0), [filteredImages])
+  const totalCostUsd        = useMemo(() => filteredImages.reduce((s, r) => s + r.costUsd, 0), [filteredImages])
+  const { costLastMonth: caLastMonth, costLastQuarter: caLastQuarter } = useMemo(() => {
+    const allDates = SATELLITE_IMAGES.map(r => new Date(r.requestedAt.split(" ")[0]).getTime())
+    const maxDate   = new Date(Math.max(...allDates))
+    const monthAgo  = new Date(maxDate); monthAgo.setDate(monthAgo.getDate() - 30)
+    const quarterAgo = new Date(maxDate); quarterAgo.setDate(quarterAgo.getDate() - 90)
+    return {
+      costLastMonth:   filteredImages.filter(r => new Date(r.requestedAt.split(" ")[0]) >= monthAgo).reduce((s,r) => s+r.costUsd, 0),
+      costLastQuarter: filteredImages.filter(r => new Date(r.requestedAt.split(" ")[0]) >= quarterAgo).reduce((s,r) => s+r.costUsd, 0),
+    }
+  }, [filteredImages])
+  const avgProgress = useMemo(() => {
+    const withAnalysis = filtered.filter(g => g.latestAnalysis)
+    if (!withAnalysis.length) return 0
+    return Math.round(withAnalysis.reduce((s, g) => s + (g.latestAnalysis!.overallPct), 0) / withAnalysis.length)
+  }, [filtered])
+
+  const fmtUsd = (n: number) => n === 0 ? "$0.00" : `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+  const toggleExpand = (id: string) => setExpanded(prev => {
+    const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next
+  })
+
   return (
-    <div className="flex flex-col items-center justify-center h-full py-24 text-center gap-4">
-      <div className="w-16 h-16 rounded-2xl bg-muted/40 flex items-center justify-center mb-2">
-        <BarChart3 className="h-8 w-8 text-muted-foreground/40" />
+    <div className="space-y-4">
+
+      {/* ── Analytics cards ── */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        {[
+          { label: "Projects",             value: String(filtered.length),              sub: "with captures" },
+          { label: "Total Captures",       value: String(filteredImages.length),         sub: "satellite images" },
+          { label: "Avg Progress",         value: `${avgProgress}%`,                    sub: "overall" },
+          { label: "Total Area Captured",  value: `${totalAreaCaptured.toFixed(2)}`,    sub: "km²" },
+          { label: "Cost Last Month",      value: fmtUsd(caLastMonth),                  sub: `~EGP ${Math.round(caLastMonth*50).toLocaleString("en-US")}` },
+          { label: "Cost Last Quarter",    value: fmtUsd(caLastQuarter),                sub: `~EGP ${Math.round(caLastQuarter*50).toLocaleString("en-US")}` },
+        ].map(({ label, value, sub }) => (
+          <div key={label} className="rounded-lg border border-border bg-card px-4 py-3">
+            <p className="text-xs text-muted-foreground mb-1">{label}</p>
+            <p className="text-2xl font-semibold tabular-nums">{value}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>
+          </div>
+        ))}
       </div>
-      <h2 className="text-base font-semibold text-foreground">Construction Update Analysis</h2>
-      <p className="text-sm text-muted-foreground max-w-sm leading-relaxed">
-        Quarterly construction progress analysis comparing satellite captures against the finalized masterplan.
-        Measures progress for construction, landscapes, and waterfronts.
-      </p>
-      <Badge variant="outline" className="text-xs text-muted-foreground mt-2">Coming Soon</Badge>
+
+      {/* ── Filter card ── */}
+      <div className="rounded-lg border border-border bg-card p-3 space-y-2.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative shrink-0 w-64">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+            <Input className="h-8 pl-8 pr-7 w-full text-sm" placeholder="Search project name or ID…"
+              value={search} onChange={e => setSearch(e.target.value)} />
+            {search && (
+              <button className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" onClick={() => setSearch("")}>
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+          <MultiSelectFilter label="District" options={uniqueDistricts} selected={districtFilter}
+            onChange={s => setDistrict(s)} className="w-32" />
+          <MultiSelectFilter label="Area" options={uniqueAreas} selected={areaFilter}
+            onChange={s => setArea(s)} className="w-28" />
+          <MultiSelectFilter label="Project" options={uniqueProjects.map(p => p.id)}
+            selected={projectFilter} onChange={s => setProject(s)} className="w-28" />
+          <DateRangeFilter label="Capture Date" dateFrom={dateFrom} dateTo={dateTo}
+            onChangeFrom={setDateFrom} onChangeTo={setDateTo} className="w-44" />
+          {hasFilter && (
+            <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground" onClick={clearFilters}>
+              <X className="h-3.5 w-3.5 mr-1" />Clear All
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* ── Project card list ── */}
+      <div className="space-y-2">
+        {filtered.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-16 text-sm text-muted-foreground gap-2">
+            <ScanSearch className="h-8 w-8 opacity-30" />
+            No projects match the current filters.
+          </div>
+        )}
+
+        {filtered.map(group => {
+          const isExpanded = expandedIds.has(group.projectId)
+          const a = group.latestAnalysis
+          const latest = group.images[group.images.length - 1]
+
+          return (
+            <div key={group.projectId} className="rounded-xl border border-border bg-card overflow-hidden">
+              {/* Card header */}
+              <div
+                className="flex flex-col gap-2 px-4 py-3.5 cursor-pointer hover:bg-muted/20 transition-colors"
+                onClick={() => toggleExpand(group.projectId)}
+              >
+              <div className="flex items-center gap-4">
+                {/* Expand chevron */}
+                <ChevronRight className={cn("h-4 w-4 text-muted-foreground flex-shrink-0 transition-transform", isExpanded && "rotate-90")} />
+
+                {/* Project info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                    <span className="text-sm font-semibold text-foreground">{group.projectName}</span>
+                    <span className="font-mono text-[10px] text-muted-foreground">{group.projectId}</span>
+                    <AreaTag areaName={group.areaName} />
+                  </div>
+                  <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                    <span>{group.developer.name}</span>
+                    <span>·</span>
+                    <span>{group.phaseName}</span>
+                    <span>·</span>
+                    <span>Latest: {formatDateTime(latest.capturedAt)}</span>
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                      {group.images.length} capture{group.images.length > 1 ? "s" : ""}
+                    </Badge>
+                  </div>
+                </div>
+
+                {/* Progress */}
+                {a && (
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    <div className="text-right min-w-[60px]">
+                      <div className="text-xl font-bold tabular-nums">{a.overallPct}%</div>
+                      {a.delta && (
+                        <div className="text-[10px] text-green-600 font-medium">+{a.overallPct - a.delta.overallFrom} pts</div>
+                      )}
+                    </div>
+                    <div className="w-24 space-y-1">
+                      <div className="relative h-1.5 rounded-full bg-muted overflow-hidden">
+                        {a.delta && <div className="absolute h-full rounded-full bg-muted-foreground/20" style={{ width:`${a.delta.overallFrom}%` }} />}
+                        <div className={cn("absolute h-full rounded-full", progressColor(a.overallPct))}
+                          style={{ width:`${a.overallPct}%` }} />
+                      </div>
+                      {a.delta && (
+                        <Badge variant="outline" className={cn("text-[9px] px-1 py-0", paceColor(a.delta.pace))}>{a.delta.pace}</Badge>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* View button */}
+                <button
+                  onClick={e => { e.stopPropagation(); setDrawerGroup(group) }}
+                  className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors flex-shrink-0"
+                  title="View Full Analysis"
+                >
+                  <Eye className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Timeline bar */}
+              {PROJECT_METADATA[group.projectId] && a && (
+                <div onClick={e => e.stopPropagation()}>
+                  <ProjectTimelineBar
+                    meta={PROJECT_METADATA[group.projectId]}
+                    captureDate={latest.capturedAt}
+                    overallPct={a.overallPct}
+                    compact
+                  />
+                </div>
+              )}
+              </div>
+
+              {/* Expanded: images mini-table */}
+              {isExpanded && (
+                <div className="border-t border-border">
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-muted/50">
+                        <th className="text-left px-4 py-2 font-medium text-muted-foreground border-r border-border">Image</th>
+                        <th className="text-left px-3 py-2 font-medium text-muted-foreground border-r border-border">Quality</th>
+                        <th className="text-left px-3 py-2 font-medium text-muted-foreground border-r border-border">Captured</th>
+                        <th className="text-left px-3 py-2 font-medium text-muted-foreground border-r border-border">System</th>
+                        <th className="text-left px-3 py-2 font-medium text-muted-foreground border-r border-border">Type</th>
+                        <th className="text-left px-3 py-2 font-medium text-muted-foreground border-r border-border">Progress</th>
+                        <th className="px-3 py-2 w-10" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {group.images.map(img => {
+                        const imgA = CONSTRUCTION_ANALYSIS[img.id]
+                        return (
+                          <tr key={img.id} className="border-t border-border hover:bg-muted/30 cursor-pointer transition-colors group"
+                            onClick={() => { setDetailImage(img); setDetailTab("main") }}>
+                            <td className="px-4 py-2.5 border-r border-border">
+                              <div className="flex items-center gap-2">
+                                <SatThumbnail image={img} size="sm" />
+                                <span className="font-mono text-muted-foreground">{img.id}</span>
+                              </div>
+                            </td>
+                            <td className="px-3 py-2.5 border-r border-border"><QualityBadge quality={img.quality} /></td>
+                            <td className="px-3 py-2.5 border-r border-border text-muted-foreground whitespace-nowrap">{formatDateTime(img.capturedAt)}</td>
+                            <td className="px-3 py-2.5 border-r border-border"><SystemBadge system={img.systemRequested} /></td>
+                            <td className="px-3 py-2.5 border-r border-border"><TypeBadge type={img.type} /></td>
+                            <td className="px-3 py-2.5 border-r border-border">
+                              {imgA ? (
+                                <div className="flex items-center gap-2">
+                                  <span className="font-semibold tabular-nums">{imgA.overallPct}%</span>
+                                  <div className="w-16 h-1.5 rounded-full bg-muted overflow-hidden">
+                                    <div className={cn("h-full rounded-full", progressColor(imgA.overallPct))}
+                                      style={{ width:`${imgA.overallPct}%` }} />
+                                  </div>
+                                </div>
+                              ) : <span className="text-muted-foreground">—</span>}
+                            </td>
+                            <td className="px-3 py-2.5">
+                              <Eye className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* ── Project Story Drawer ── */}
+      <ConstructionProjectDrawer
+        group={drawerGroup}
+        open={!!drawerGroup}
+        onClose={() => setDrawerGroup(null)}
+        onViewImage={(img) => { setDetailImage(img); setDetailTab("main") }}
+      />
+
+      {/* ── Image Detail Sheet (re-using same content as Images tab) ── */}
+      <Sheet open={!!detailImage} onOpenChange={(o) => !o && setDetailImage(null)}>
+        <SheetContent className="w-[620px] sm:max-w-[620px] flex flex-col p-0">
+          {detailImage && (() => {
+            const selected = detailImage
+            const area = convertArea(selected.totalAreaKm2)
+            return (
+              <>
+                <SheetHeader className="px-6 py-4 border-b border-border shrink-0 space-y-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <CopyId value={selected.id} className="font-semibold text-foreground text-xs" />
+                    <QualityBadge quality={selected.quality} />
+                    <TypeBadge type={selected.type} />
+                  </div>
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    <SheetTitle className="text-base font-semibold">{selected.projectName} — {selected.phaseName}</SheetTitle>
+                    <CopyId value={selected.projectId} />
+                  </div>
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    <p className="text-sm font-medium">{selected.developer.name}</p>
+                    <CopyId value={selected.developer.id} />
+                  </div>
+                  <p className="text-xs text-muted-foreground">{selected.areaName}{selected.subAreaName ? ` — ${selected.subAreaName}` : ""}</p>
+                  {PROJECT_METADATA[selected.projectId] && (
+                    <div className="pt-1">
+                      <ProjectTimelineBar
+                        meta={PROJECT_METADATA[selected.projectId]}
+                        captureDate={selected.capturedAt}
+                        overallPct={CONSTRUCTION_ANALYSIS[selected.id]?.overallPct ?? 0}
+                      />
+                    </div>
+                  )}
+                </SheetHeader>
+                <div className="flex shrink-0 border-b border-border px-6">
+                  {(["main","analysis"] as const).map(t => (
+                    <button key={t} onClick={() => setDetailTab(t)}
+                      className={cn("py-2.5 px-1 mr-5 text-sm font-medium border-b-2 transition-colors",
+                        detailTab === t ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground")}>
+                      {t === "main" ? "Main Info" : "Construction Analysis"}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+                  {detailTab === "analysis" && <ConstructionAnalysisPanel image={selected} />}
+                  {detailTab === "main" && (
+                    <div className="space-y-6">
+                      <ImageCard image={selected} />
+                      <Separator />
+                      <div>
+                        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">Image Details</p>
+                        <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                          {[
+                            { label: "Satellite",    value: <SatelliteBadge satellite={selected.satellite} /> },
+                            { label: "System",       value: <SystemBadge system={selected.systemRequested} /> },
+                            { label: "Quality",      value: <QualityBadge quality={selected.quality} /> },
+                            { label: "Type",         value: <TypeBadge type={selected.type} /> },
+                            { label: "GSD Range",    value: getZoomHeight(selected.satellite) },
+                            { label: "Requested At", value: formatDateTime(selected.requestedAt) },
+                            { label: "Captured At",  value: formatDateTime(selected.capturedAt) },
+                            { label: "Created At",   value: formatDateTime(selected.createdAt) },
+                            { label: "Updated At",   value: formatDateTime(selected.updatedAt) },
+                          ].map(({ label, value }) => (
+                            <div key={label}>
+                              <p className="text-[10px] text-muted-foreground mb-0.5">{label}</p>
+                              {typeof value === "string" ? <p className="text-sm font-medium">{value}</p> : value}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <Separator />
+                      <div>
+                        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">Imaging Cost</p>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="rounded-lg border border-border bg-muted/30 px-3 py-2.5">
+                            <p className="text-[10px] text-muted-foreground mb-0.5">Area Captured</p>
+                            <p className="text-sm font-semibold tabular-nums">{selected.areaCapturedKm2.toFixed(3)} km²</p>
+                          </div>
+                          <div className="rounded-lg border border-border bg-muted/30 px-3 py-2.5">
+                            <p className="text-[10px] text-muted-foreground mb-0.5">Cost (USD)</p>
+                            <p className="text-sm font-semibold tabular-nums">{selected.costUsd === 0 ? "Free" : `$${selected.costUsd.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`}</p>
+                          </div>
+                          <div className="rounded-lg border border-border bg-muted/30 px-3 py-2.5">
+                            <p className="text-[10px] text-muted-foreground mb-0.5">Cost (EGP)</p>
+                            <p className="text-sm font-semibold tabular-nums">{selected.costEgp === 0 ? "Free" : `EGP ${selected.costEgp.toLocaleString("en-US",{maximumFractionDigits:0})}`}</p>
+                          </div>
+                        </div>
+                      </div>
+                      <Separator />
+                      <div>
+                        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                          <Ruler className="h-3.5 w-3.5" />Project Area
+                        </p>
+                        <div className="grid grid-cols-3 gap-2">
+                          {[
+                            { label: "Sq. Kilometres", value: `${area.km2} km²` },
+                            { label: "Sq. Metres",     value: `${area.m2} m²` },
+                            { label: "Feddans",        value: `${area.feddans} fed` },
+                            { label: "Acres",          value: `${area.acres} ac` },
+                            { label: "Hectares",       value: `${area.hectares} ha` },
+                          ].map(({ label, value }) => (
+                            <div key={label} className="rounded-lg border border-border bg-muted/30 px-3 py-2.5">
+                              <p className="text-[10px] text-muted-foreground mb-0.5">{label}</p>
+                              <p className="text-sm font-semibold tabular-nums">{value}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <Separator />
+                      <div>
+                        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">Developer & Project</p>
+                        <div className="grid grid-cols-4 gap-3">
+                          {[
+                            { label: "Developer", value: selected.developer.name, id: selected.developer.id },
+                            { label: "Area",      value: selected.areaName,       id: selected.areaId },
+                            { label: "Project",   value: selected.projectName,    id: selected.projectId },
+                            { label: "Phase",     value: selected.phaseName,      id: selected.phaseId },
+                          ].map(({ label, value, id }) => (
+                            <div key={label} className="min-w-0">
+                              <p className="text-[10px] text-muted-foreground mb-0.5">{label}</p>
+                              <p className="text-sm font-medium truncate">{value}</p>
+                              <CopyId value={id} />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            )
+          })()}
+        </SheetContent>
+      </Sheet>
+
     </div>
   )
 }
