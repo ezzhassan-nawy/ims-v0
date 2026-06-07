@@ -5,12 +5,14 @@ import React from "react"
 import {
   AlertTriangle,
   Archive,
+  ArrowRightLeft,
   ArrowUpDown,
   Banknote,
   Bath,
   BedDouble,
   Building2,
   CalendarDays,
+  CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -20,14 +22,17 @@ import {
   Copy,
   Edit,
   Eye,
+  EyeOff,
   ExternalLink,
   FileDown,
   FileSpreadsheet,
   FileText,
   Globe,
   Home,
+  Info,
   Layers,
   MapPin,
+  MoveRight,
   MoreVertical,
   Percent,
   Plus,
@@ -38,10 +43,12 @@ import {
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Separator } from "@/components/ui/separator"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { EmbeddedPropertyTable, createRows, type ColId, type PropertyRow } from "@/components/all-properties-page"
@@ -779,6 +786,514 @@ function getGroupSortValue(group: GroupedProperty, col: string): string | number
   }
 }
 
+// ── Static destination data for Change Compound modal ─────────────────────────
+const DEST_DEVELOPERS = [
+  { id: "DEV-001", name: "Lasirena Group" },
+  { id: "DEV-002", name: "Palm Hills" },
+  { id: "DEV-003", name: "Sodic" },
+  { id: "DEV-004", name: "Mountain View" },
+  { id: "DEV-005", name: "Emaar Misr" },
+]
+
+const DEST_PROJECTS: Record<string, { id: string; name: string; phases: { id: string; name: string }[] }[]> = {
+  "DEV-001": [
+    { id: "PRJ-L1", name: "Palm Beach Resort", phases: [{ id: "PH-L1", name: "Phase 1" }, { id: "PH-L2", name: "Phase 2" }] },
+    { id: "PRJ-L2", name: "Lasirena Hub", phases: [{ id: "PH-L3", name: "Phase A" }] },
+  ],
+  "DEV-002": [
+    { id: "PRJ-P1", name: "New Cairo Gate", phases: [{ id: "PH-P1", name: "Phase 1" }, { id: "PH-P2", name: "Phase 2" }, { id: "PH-P3", name: "Phase 3" }] },
+    { id: "PRJ-P2", name: "Hacienda Bay", phases: [{ id: "PH-P4", name: "Phase 1" }] },
+  ],
+  "DEV-003": [
+    { id: "PRJ-S1", name: "SODIC West", phases: [{ id: "PH-S1", name: "Phase 1" }, { id: "PH-S2", name: "Phase 2" }] },
+    { id: "PRJ-S2", name: "Villette", phases: [] },
+  ],
+  "DEV-004": [
+    { id: "PRJ-M1", name: "North Bay", phases: [{ id: "PH-M1", name: "Phase 1" }, { id: "PH-M2", name: "Phase 2" }] },
+    { id: "PRJ-M2", name: "Lagoon Heights", phases: [{ id: "PH-M3", name: "Phase A" }, { id: "PH-M4", name: "Phase B" }] },
+  ],
+  "DEV-005": [
+    { id: "PRJ-E1", name: "Marassi", phases: [{ id: "PH-E1", name: "Phase 1" }, { id: "PH-E2", name: "Phase 2" }, { id: "PH-E3", name: "Phase 3" }] },
+    { id: "PRJ-E2", name: "Cairo Gate", phases: [{ id: "PH-E4", name: "Phase 1" }] },
+  ],
+}
+
+// Simulate duplicate unit codes: if destination project ID ends in "1", pretend some codes clash
+function simulateDuplicates(unitCodes: string[], destProjectId: string): string[] {
+  if (destProjectId.endsWith("1") && unitCodes.length > 0) {
+    return unitCodes.slice(0, Math.min(2, unitCodes.length))
+  }
+  return []
+}
+
+// ── Per-compound destination selector sub-component ───────────────────────────
+interface DestSelectorProps {
+  value: { devId: string; projectId: string; phaseId: string }
+  onChange: (v: { devId: string; projectId: string; phaseId: string }) => void
+}
+function DestSelector({ value, onChange }: DestSelectorProps) {
+  const projects = value.devId ? (DEST_PROJECTS[value.devId] ?? []) : []
+  const phases = projects.find(p => p.id === value.projectId)?.phases ?? []
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      <div className="space-y-1">
+        <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Developer</label>
+        <Select value={value.devId} onValueChange={v => onChange({ devId: v, projectId: "", phaseId: "none" })}>
+          <SelectTrigger className="h-8 text-xs">
+            <SelectValue placeholder="Select…" />
+          </SelectTrigger>
+          <SelectContent>
+            {DEST_DEVELOPERS.map(d => <SelectItem key={d.id} value={d.id} className="text-xs">{d.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-1">
+        <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Project</label>
+        <Select value={value.projectId} onValueChange={v => onChange({ ...value, projectId: v, phaseId: "none" })} disabled={!value.devId}>
+          <SelectTrigger className="h-8 text-xs">
+            <SelectValue placeholder={value.devId ? "Select…" : "— pick dev first"} />
+          </SelectTrigger>
+          <SelectContent>
+            {projects.map(p => <SelectItem key={p.id} value={p.id} className="text-xs">{p.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-1">
+        <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Phase <span className="normal-case font-normal">(optional)</span></label>
+        <Select value={value.phaseId} onValueChange={v => onChange({ ...value, phaseId: v })} disabled={!value.projectId}>
+          <SelectTrigger className="h-8 text-xs">
+            <SelectValue placeholder={!value.projectId ? "— pick project" : phases.length === 0 ? "No phases" : "Select…"} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none" className="text-xs">No specific phase</SelectItem>
+            {phases.map(ph => <SelectItem key={ph.id} value={ph.id} className="text-xs">{ph.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  )
+}
+
+interface ChangeProjectModalProps {
+  open: boolean
+  onClose: () => void
+  selectedGroups: GroupedProperty[]
+  onConfirm: (moves: { groupIds: string[]; devId: string; projectId: string; phaseId: string | null }[]) => void
+}
+
+function ChangeProjectModal({ open, onClose, selectedGroups, onConfirm }: ChangeProjectModalProps) {
+  const eligibleTypes: GroupedProperty["saleType"][] = ["Primary", "Launch"]
+  const eligible = selectedGroups.filter(g => eligibleTypes.includes(g.saleType))
+  const ineligible = selectedGroups.filter(g => !eligibleTypes.includes(g.saleType))
+
+  // Count ineligible by type
+  const ineligibleByType = ineligible.reduce<Record<string, number>>((acc, g) => {
+    acc[g.saleType] = (acc[g.saleType] ?? 0) + 1
+    return acc
+  }, {})
+
+  // Group eligible by compound key: devId|projectId|phaseId
+  type CompoundGroup = {
+    key: string
+    devId: string; devName: string
+    projectId: string; projectName: string
+    phaseId: string | null; phaseName: string | null
+    groups: GroupedProperty[]
+  }
+  const compoundGroups: CompoundGroup[] = useMemo(() => {
+    const map = new Map<string, CompoundGroup>()
+    for (const g of eligible) {
+      const key = `${g.developer.id}|${g.project.id}|${g.phase?.id ?? "none"}`
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          devId: g.developer.id, devName: g.developer.name,
+          projectId: g.project.id, projectName: g.project.name,
+          phaseId: g.phase?.id ?? null, phaseName: g.phase?.name ?? null,
+          groups: [],
+        })
+      }
+      map.get(key)!.groups.push(g)
+    }
+    return Array.from(map.values())
+  }, [eligible])
+
+  type DestState = { devId: string; projectId: string; phaseId: string }
+  const [destinations, setDestinations] = useState<Record<string, DestState>>({})
+  const [step, setStep] = useState<"select" | "review" | "done">("select")
+  const [conflictMap, setConflictMap] = useState<Record<string, string[]>>({}) // key → duplicate codes
+
+  React.useEffect(() => {
+    if (open) { setStep("select"); setDestinations({}); setConflictMap({}) }
+  }, [open])
+
+  const setDest = (key: string, v: DestState) => setDestinations(prev => ({ ...prev, [key]: v }))
+
+  const allDestinationsSet = compoundGroups.every(cg => {
+    const d = destinations[cg.key]
+    return d && d.devId && d.projectId
+  })
+
+  function handleCheckConflicts() {
+    const newConflictMap: Record<string, string[]> = {}
+    for (const cg of compoundGroups) {
+      const dest = destinations[cg.key]
+      if (!dest?.projectId) continue
+      const codes = cg.groups.flatMap(g => g.details.map(d => d.unitCode))
+      const dupes = simulateDuplicates(codes, dest.projectId)
+      if (dupes.length > 0) newConflictMap[cg.key] = dupes
+    }
+    setConflictMap(newConflictMap)
+    setStep("review")
+  }
+
+  function handleConfirm() {
+    const moves = compoundGroups.map(cg => {
+      const d = destinations[cg.key] ?? { devId: "", projectId: "", phaseId: "none" }
+      return {
+        groupIds: cg.groups.map(g => g.id),
+        devId: d.devId,
+        projectId: d.projectId,
+        phaseId: d.phaseId !== "none" ? d.phaseId : null,
+      }
+    })
+    onConfirm(moves)
+    setStep("done")
+  }
+
+  const totalGroupsMoved = eligible.length
+  const totalDetailsMoved = eligible.reduce((s, g) => s + g.details.length, 0)
+  const hasConflicts = Object.keys(conflictMap).length > 0
+
+  return (
+    <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
+      <DialogContent className="!max-w-5xl w-[95vw] sm:!max-w-5xl p-0 gap-0 flex flex-col" style={{ maxHeight: "92vh", height: "92vh" }}>
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
+          <div className="flex items-center gap-2.5">
+            <ArrowRightLeft className="h-4 w-4 text-muted-foreground" />
+            <h2 className="text-base font-semibold">Change Project</h2>
+            {step === "review" && (
+              <Badge className="bg-muted text-muted-foreground border border-border text-xs font-medium ml-1">Conflict Check</Badge>
+            )}
+            {step === "done" && (
+              <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-medium ml-1">Done</Badge>
+            )}
+          </div>
+          {/* Step indicator */}
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span className={cn("font-medium", step === "select" ? "text-foreground" : "")}>1 Select</span>
+            <ChevronRight className="h-3 w-3" />
+            <span className={cn("font-medium", step === "review" ? "text-foreground" : "")}>2 Review</span>
+            <ChevronRight className="h-3 w-3" />
+            <span className={cn("font-medium", step === "done" ? "text-foreground" : "")}>3 Confirm</span>
+          </div>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto">
+
+          {/* ── STEP 1: SELECT ── */}
+          {step === "select" && (
+            <div className="p-6 space-y-5">
+
+              {/* Top summary bar */}
+              <div className="flex items-center gap-4 rounded-lg border border-border bg-muted/40 px-4 py-3">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm font-semibold">{selectedGroups.length}</span>
+                  <span className="text-sm text-muted-foreground">groups selected</span>
+                </div>
+                <div className="w-px h-4 bg-border" />
+                <div className="flex items-center gap-1.5">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                  <span className="text-sm font-medium text-emerald-700">{eligible.length} eligible</span>
+                  <span className="text-xs text-muted-foreground">(Primary · Launch)</span>
+                </div>
+                {ineligible.length > 0 && (
+                  <>
+                    <div className="w-px h-4 bg-border" />
+                    <div className="flex items-center gap-1.5">
+                      <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                      <span className="text-sm font-medium text-amber-700">{ineligible.length} will be skipped</span>
+                      <span className="text-xs text-muted-foreground">
+                        ({Object.entries(ineligibleByType).map(([t, n]) => `${n} ${t}`).join(" · ")})
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Ineligible callout */}
+              {ineligible.length > 0 && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 flex gap-3">
+                  <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                  <div className="space-y-0.5">
+                    <p className="text-sm font-medium text-amber-800">
+                      {ineligible.length} group{ineligible.length !== 1 ? "s" : ""} will be ignored
+                    </p>
+                    <p className="text-xs text-amber-700">
+                      Resale, Nawy Now, and Rental properties cannot be moved to a different project. Only Primary and Launch units will be transferred.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {eligible.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-border bg-muted/30 px-6 py-10 text-center space-y-1">
+                  <p className="text-sm font-medium text-foreground">No eligible groups selected</p>
+                  <p className="text-xs text-muted-foreground">Select Primary or Launch properties to use Change Project.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    {compoundGroups.length} source compound{compoundGroups.length !== 1 ? "s" : ""} — set a destination for each
+                  </p>
+
+                  {compoundGroups.map(cg => {
+                    const totalDetails = cg.groups.reduce((s, g) => s + g.details.length, 0)
+                    const availableDetails = cg.groups.reduce((s, g) => s + g.details.filter(d => d.status === "Available").length, 0)
+                    const dest = destinations[cg.key] ?? { devId: "", projectId: "", phaseId: "none" }
+
+                    return (
+                      <div key={cg.key} className="rounded-xl border border-border bg-card overflow-hidden">
+                        {/* Compound header */}
+                        <div className="px-5 py-3 bg-muted/50 border-b border-border">
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-0.5">
+                            <Building2 className="h-3 w-3" />
+                            <span className="font-medium text-foreground">{cg.devName}</span>
+                            <span>·</span>
+                            <span className="font-mono text-[10px]">{cg.devId}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-semibold text-foreground">
+                              {cg.projectName}{cg.phaseName ? ` — ${cg.phaseName}` : ""}
+                            </p>
+                            <span className="text-xs text-muted-foreground font-mono">· {cg.projectId}</span>
+                          </div>
+                          <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
+                            <span>{cg.groups.length} grouped {cg.groups.length === 1 ? "property" : "properties"}</span>
+                            <span>·</span>
+                            <span>{totalDetails} detailed {totalDetails === 1 ? "property" : "properties"}</span>
+                            <span className="text-emerald-600 font-medium">({availableDetails} available)</span>
+                          </div>
+                        </div>
+
+                        {/* Individual group rows */}
+                        <div className="divide-y divide-border">
+                          {cg.groups.map(g => {
+                            const avail = g.details.filter(d => d.status === "Available").length
+                            const total = g.details.length
+                            return (
+                              <div key={g.id} className="flex items-center justify-between px-5 py-2.5">
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <span className="text-xs font-mono text-muted-foreground shrink-0">{g.id}</span>
+                                  <span className="text-xs text-foreground truncate">{g.title}</span>
+                                </div>
+                                <div className="flex items-center gap-3 shrink-0 ml-4">
+                                  <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0 font-medium", badgeClass[g.saleType])}>
+                                    {g.saleType}
+                                  </Badge>
+                                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                    <span className="font-medium text-emerald-600">{avail} available</span>
+                                    <span> / {total} total</span>
+                                  </span>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+
+                        {/* Destination selector */}
+                        <div className="px-5 py-4 bg-muted/20 border-t border-border space-y-2">
+                          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                            <MoveRight className="h-3 w-3" /> Destination
+                          </p>
+                          <DestSelector
+                            value={dest}
+                            onChange={v => setDest(cg.key, v)}
+                          />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── STEP 2: REVIEW ── */}
+          {step === "review" && (
+            <div className="p-6 space-y-5">
+              {/* Summary */}
+              <div className="flex items-center gap-4 rounded-lg border border-border bg-muted/40 px-4 py-3">
+                <span className="text-sm font-medium">{totalGroupsMoved} groups · {totalDetailsMoved} detailed units will be moved</span>
+                {hasConflicts ? (
+                  <>
+                    <div className="w-px h-4 bg-border" />
+                    <span className="flex items-center gap-1.5 text-sm text-amber-700 font-medium">
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                      {Object.values(conflictMap).reduce((s, a) => s + a.length, 0)} unit code conflicts across {Object.keys(conflictMap).length} destination{Object.keys(conflictMap).length !== 1 ? "s" : ""}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-px h-4 bg-border" />
+                    <span className="flex items-center gap-1.5 text-sm text-emerald-700 font-medium">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      No unit code conflicts found
+                    </span>
+                  </>
+                )}
+              </div>
+
+              {/* Per-compound review cards */}
+              <div className="space-y-4">
+                {compoundGroups.map(cg => {
+                  const dest = destinations[cg.key] ?? { devId: "", projectId: "", phaseId: "none" }
+                  const destDev = DEST_DEVELOPERS.find(d => d.id === dest.devId)
+                  const destProj = (DEST_PROJECTS[dest.devId] ?? []).find(p => p.id === dest.projectId)
+                  const destPhaseObj = dest.phaseId !== "none" ? (destProj?.phases ?? []).find(ph => ph.id === dest.phaseId) : null
+                  const dupes = conflictMap[cg.key] ?? []
+                  const totalDetails = cg.groups.reduce((s, g) => s + g.details.length, 0)
+
+                  return (
+                    <div key={cg.key} className="rounded-xl border border-border bg-card overflow-hidden">
+                      {/* Source → Destination header */}
+                      <div className="px-5 py-3 bg-muted/50 border-b border-border">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <div className="flex items-center gap-1.5">
+                            <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
+                            <span className="text-xs font-medium text-muted-foreground">{cg.devName}</span>
+                            <span className="text-xs text-muted-foreground">›</span>
+                            <span className="text-xs font-semibold text-foreground">{cg.projectName}</span>
+                            {cg.phaseName && <span className="text-xs text-muted-foreground">— {cg.phaseName}</span>}
+                          </div>
+                          <ArrowRightLeft className="h-3.5 w-3.5 text-muted-foreground mx-1" />
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-medium text-muted-foreground">{destDev?.name ?? "—"}</span>
+                            <span className="text-xs text-muted-foreground">›</span>
+                            <span className="text-xs font-semibold text-foreground">{destProj?.name ?? "—"}</span>
+                            {destPhaseObj && <span className="text-xs text-muted-foreground">— {destPhaseObj.name}</span>}
+                          </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {cg.groups.length} grouped · {totalDetails} detailed properties
+                        </p>
+                      </div>
+
+                      {/* Conflict info or clear */}
+                      <div className="px-5 py-3">
+                        {dupes.length > 0 ? (
+                          <div className="space-y-2">
+                            <div className="flex items-start gap-2">
+                              <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                              <div>
+                                <p className="text-sm font-medium text-amber-800">
+                                  {dupes.length} unit code{dupes.length !== 1 ? "s" : ""} already exist in <strong>{destProj?.name}</strong>
+                                </p>
+                                <p className="text-xs text-amber-700 mt-0.5">
+                                  These units will be <strong>merged</strong> — the most recently updated record will be preserved and the older duplicate removed automatically.
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5 pl-6">
+                              {dupes.map(code => (
+                                <span key={code} className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-mono text-amber-700">{code}</span>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                            <p className="text-xs text-emerald-700">No unit code conflicts in <strong>{destProj?.name}</strong>. All units will be moved cleanly.</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Global merge note if any conflicts */}
+              {hasConflicts && (
+                <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 flex gap-3">
+                  <Info className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
+                  <p className="text-xs text-blue-800">
+                    <strong>Merge behaviour:</strong> When a unit code exists in both source and destination, the system will keep the record with the most recent <em>last updated</em> timestamp. No data will be lost — the older duplicate will be archived. No action is required from you.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── STEP 3: DONE ── */}
+          {step === "done" && (
+            <div className="p-10 text-center space-y-4">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50 border-2 border-emerald-200">
+                <CheckCircle2 className="h-8 w-8 text-emerald-500" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-base font-semibold">Transfer complete</p>
+                <p className="text-sm text-muted-foreground">
+                  {totalGroupsMoved} grouped propert{totalGroupsMoved !== 1 ? "ies" : "y"} · {totalDetailsMoved} detailed units moved across {compoundGroups.length} compound{compoundGroups.length !== 1 ? "s" : ""}.
+                </p>
+              </div>
+              <div className="inline-flex flex-col items-start gap-1 rounded-lg border border-border bg-muted/40 px-5 py-3 text-left mt-2">
+                {compoundGroups.map(cg => {
+                  const dest = destinations[cg.key]
+                  const destProj = (DEST_PROJECTS[dest?.devId ?? ""] ?? []).find(p => p.id === dest?.projectId)
+                  const destDev = DEST_DEVELOPERS.find(d => d.id === dest?.devId)
+                  return destProj ? (
+                    <p key={cg.key} className="text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground">{cg.projectName}</span>
+                      {" → "}
+                      <span className="font-medium text-foreground">{destDev?.name} · {destProj.name}</span>
+                    </p>
+                  ) : null
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between px-6 py-4 border-t border-border bg-card shrink-0">
+          <div className="text-xs text-muted-foreground">
+            {step === "select" && eligible.length > 0 && (
+              <span>{compoundGroups.length} compound{compoundGroups.length !== 1 ? "s" : ""} · {eligible.length} groups · {eligible.reduce((s, g) => s + g.details.length, 0)} units</span>
+            )}
+            {step === "review" && hasConflicts && (
+              <span className="text-amber-600 font-medium">Conflicts will be auto-merged on confirm</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {step === "select" && (
+              <>
+                <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
+                <Button size="sm" onClick={handleCheckConflicts} disabled={!allDestinationsSet || eligible.length === 0}>
+                  Check conflicts
+                  <MoveRight className="h-3.5 w-3.5 ml-1.5" />
+                </Button>
+              </>
+            )}
+            {step === "review" && (
+              <>
+                <Button variant="outline" size="sm" onClick={() => setStep("select")}>Back</Button>
+                <Button size="sm" onClick={handleConfirm}>
+                  Confirm transfer
+                </Button>
+              </>
+            )}
+            {step === "done" && (
+              <Button size="sm" onClick={onClose}>Done</Button>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export function GroupedPropertiesView({
   filters,
   sortConfigs = [],
@@ -792,7 +1307,7 @@ export function GroupedPropertiesView({
   groupConnector?: "AND" | "OR"
   groupByColumn?: string | null
 }) {
-  const [groups] = useState<GroupedProperty[]>(() => makeGroups())
+  const [groups, setGroups] = useState<GroupedProperty[]>(() => makeGroups())
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set([groups[0]?.id].filter(Boolean)))
   const allRows = useMemo(() => createRows(), [])
   const [currentPage, setCurrentPage] = useState(1)
@@ -800,6 +1315,7 @@ export function GroupedPropertiesView({
   const [selectedCards, setSelectedCards] = useState<Set<string>>(new Set())
   const lastSelectedIdxRef = useRef<number | null>(null)
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
+  const [showChangeCompound, setShowChangeCompound] = useState(false)
 
   const filteredGroups = useMemo(() => {
     const query = filters.searchQuery.toLowerCase()
@@ -975,37 +1491,121 @@ export function GroupedPropertiesView({
         </div>
 
       {/* Bulk action floating bar */}
-      {selectedCards.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-0 bg-zinc-900 text-white rounded-xl shadow-2xl overflow-hidden text-sm select-none">
-          <div className="flex items-center gap-3 px-4 py-2.5">
-            <span className="font-semibold tabular-nums">{selectedCards.size} selected</span>
+      {selectedCards.size > 0 && (() => {
+        const selGroups = groups.filter(g => selectedCards.has(g.id))
+        const eligibleTypes: GroupedProperty["saleType"][] = ["Primary", "Launch"]
+        const hasEligible = selGroups.some(g => eligibleTypes.includes(g.saleType))
+        // Determine current publish state for toggle label
+        const allPublished = selGroups.every(g => g.listingStatus === "Published")
+
+        const handlePublishToggle = () => {
+          const next = allPublished ? "Hidden" : "Published"
+          setGroups(prev => prev.map(g => selectedCards.has(g.id) ? { ...g, listingStatus: next } : g))
+        }
+
+        return (
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-0 bg-zinc-900 text-white rounded-xl shadow-2xl overflow-hidden text-sm select-none">
+            {/* Count + Select all */}
+            <div className="flex items-center gap-3 px-4 py-2.5">
+              <span className="font-semibold tabular-nums">{selectedCards.size} selected</span>
+              <button
+                onClick={() => setSelectedCards(new Set(filteredGroups.map(g => g.id)))}
+                className="text-zinc-400 hover:text-white transition-colors text-xs font-medium"
+              >
+                Select all {filteredGroups.length > selectedCards.size ? `(${filteredGroups.length})` : ""}
+              </button>
+            </div>
+
+            <div className="w-px h-8 bg-zinc-700" />
+
+            {/* is Publish */}
             <button
-              onClick={() => setSelectedCards(new Set(paginatedGroups.map((g) => g.id)))}
-              className="text-zinc-400 hover:text-white transition-colors text-xs font-medium"
+              onClick={handlePublishToggle}
+              className="flex items-center gap-1.5 px-4 py-2.5 hover:bg-zinc-800 transition-colors"
             >
-              Select all
+              {allPublished
+                ? <><EyeOff className="h-3.5 w-3.5 text-zinc-400" /> Unpublish</>
+                : <><Eye className="h-3.5 w-3.5 text-zinc-400" /> Publish</>
+              }
+            </button>
+
+            <div className="w-px h-8 bg-zinc-700" />
+
+            {/* Change Project — only for Primary/Launch */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => hasEligible && setShowChangeCompound(true)}
+                  className={cn(
+                    "flex items-center gap-1.5 px-4 py-2.5 transition-colors",
+                    hasEligible ? "hover:bg-zinc-800 cursor-pointer" : "opacity-40 cursor-not-allowed"
+                  )}
+                >
+                  <ArrowRightLeft className="h-3.5 w-3.5 text-zinc-400" />
+                  Change Project
+                </button>
+              </TooltipTrigger>
+              {!hasEligible && (
+                <TooltipContent side="top" className="text-xs max-w-[220px]">
+                  Only Primary and Launch properties can be moved to a different project.
+                </TooltipContent>
+              )}
+            </Tooltip>
+
+            <div className="w-px h-8 bg-zinc-700" />
+
+            {/* Export */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-1.5 px-4 py-2.5 hover:bg-zinc-800 transition-colors">
+                  <FileDown className="h-3.5 w-3.5 text-zinc-400" />
+                  Export
+                  <ChevronDown className="h-3 w-3 text-zinc-500 ml-0.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[140px]">
+                <DropdownMenuItem><FileText className="h-4 w-4 mr-2" />CSV</DropdownMenuItem>
+                <DropdownMenuItem><FileSpreadsheet className="h-4 w-4 mr-2" />Excel</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem><FileDown className="h-4 w-4 mr-2" />PDF</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <div className="w-px h-8 bg-zinc-700" />
+
+            {/* Dismiss */}
+            <button
+              onClick={() => setSelectedCards(new Set())}
+              className="px-3 py-2.5 hover:bg-zinc-800 transition-colors text-zinc-400 hover:text-white"
+            >
+              <X className="h-4 w-4" />
             </button>
           </div>
-          <div className="w-px h-8 bg-zinc-700" />
-          <button className="flex items-center gap-1.5 px-4 py-2.5 hover:bg-zinc-800 transition-colors">
-            <Edit className="h-3.5 w-3.5 text-zinc-400" />
-            Edit fields
-          </button>
-          <button className="flex items-center gap-1.5 px-4 py-2.5 hover:bg-zinc-800 transition-colors">
-            <ArrowUpDown className="h-3.5 w-3.5 text-zinc-400" />
-            Change status
-          </button>
-          <div className="w-px h-8 bg-zinc-700" />
-          <button className="flex items-center gap-1.5 px-4 py-2.5 hover:bg-zinc-800 transition-colors text-red-400 hover:text-red-300">
-            <Archive className="h-3.5 w-3.5" />
-            Archive
-          </button>
-          <div className="w-px h-8 bg-zinc-700" />
-          <button onClick={() => setSelectedCards(new Set())} className="px-3 py-2.5 hover:bg-zinc-800 transition-colors text-zinc-400 hover:text-white">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-      )}
+        )
+      })()}
+
+      {/* Change Project Modal */}
+      <ChangeProjectModal
+        open={showChangeCompound}
+        onClose={() => setShowChangeCompound(false)}
+        selectedGroups={groups.filter(g => selectedCards.has(g.id))}
+        onConfirm={(moves) => {
+          setGroups(prev => prev.map(g => {
+            const move = moves.find(m => m.groupIds.includes(g.id))
+            if (!move) return g
+            const dev = DEST_DEVELOPERS.find(d => d.id === move.devId)
+            const proj = (DEST_PROJECTS[move.devId] ?? []).find(p => p.id === move.projectId)
+            const phase = move.phaseId ? (proj?.phases ?? []).find(ph => ph.id === move.phaseId) ?? null : null
+            return {
+              ...g,
+              developer: dev ? { name: dev.name, id: dev.id, url: "#" } : g.developer,
+              project: proj ? { name: proj.name, id: proj.id, url: "#" } : g.project,
+              phase: phase ? { name: phase.name, id: phase.id, url: "#" } : g.phase,
+            }
+          }))
+          setSelectedCards(new Set())
+        }}
+      />
 
       {/* Pagination */}
       <div className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground">

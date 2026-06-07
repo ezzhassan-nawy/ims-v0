@@ -3851,43 +3851,72 @@ export function DetailedPropertiesView({ filters }: { filters: FilterProps }) {
       </div>
 
       {/* Bulk action bar */}
-      {selectedRows.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-0 bg-zinc-900 text-white rounded-xl shadow-2xl overflow-hidden text-sm select-none">
-          {/* Count + select all */}
-          <div className="flex items-center gap-3 px-4 py-2.5">
-            <span className="font-semibold tabular-nums">{selectedRows.size} selected</span>
+      {selectedRows.size > 0 && (() => {
+        const selRows = rows.filter(r => selectedRows.has(r.propertyId))
+        const allActive = selRows.every(r => r.listingStatus === "Active")
+
+        const handleBulkPublish = () => {
+          const next: ListingStatus = allActive ? "Hidden" : "Active"
+          selectedRows.forEach(id => updateRow(id, { listingStatus: next }))
+        }
+
+        return (
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-0 bg-zinc-900 text-white rounded-xl shadow-2xl overflow-hidden text-sm select-none">
+            {/* Count + select all */}
+            <div className="flex items-center gap-3 px-4 py-2.5">
+              <span className="font-semibold tabular-nums">{selectedRows.size} selected</span>
+              <button
+                onClick={() => handleSelectAll(true)}
+                className="text-zinc-400 hover:text-white transition-colors text-xs font-medium"
+              >
+                Select all {filteredRows.length > selectedRows.size ? `(${filteredRows.length})` : ""}
+              </button>
+            </div>
+
+            <div className="w-px h-8 bg-zinc-700" />
+
+            {/* is Publish */}
             <button
-              onClick={() => handleSelectAll(true)}
-              className="text-zinc-400 hover:text-white transition-colors text-xs font-medium"
+              onClick={handleBulkPublish}
+              className="flex items-center gap-1.5 px-4 py-2.5 hover:bg-zinc-800 transition-colors"
             >
-              Select all
+              {allActive
+                ? <><EyeOff className="h-3.5 w-3.5 text-zinc-400" /> Hide listing</>
+                : <><Eye className="h-3.5 w-3.5 text-zinc-400" /> Publish listing</>
+              }
+            </button>
+
+            <div className="w-px h-8 bg-zinc-700" />
+
+            {/* Export */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-1.5 px-4 py-2.5 hover:bg-zinc-800 transition-colors">
+                  <FileDown className="h-3.5 w-3.5 text-zinc-400" />
+                  Export
+                  <ChevronDown className="h-3 w-3 text-zinc-500 ml-0.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[140px]">
+                <DropdownMenuItem><FileText className="h-4 w-4 mr-2" />CSV</DropdownMenuItem>
+                <DropdownMenuItem><FileSpreadsheet className="h-4 w-4 mr-2" />Excel</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem><FileDown className="h-4 w-4 mr-2" />PDF</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <div className="w-px h-8 bg-zinc-700" />
+
+            {/* Dismiss */}
+            <button
+              onClick={() => setSelectedRows(new Set())}
+              className="px-3 py-2.5 hover:bg-zinc-800 transition-colors text-zinc-400 hover:text-white"
+            >
+              <X className="h-4 w-4" />
             </button>
           </div>
-          <div className="w-px h-8 bg-zinc-700" />
-          {/* Actions */}
-          <button className="flex items-center gap-1.5 px-4 py-2.5 hover:bg-zinc-800 transition-colors">
-            <Edit className="h-3.5 w-3.5 text-zinc-400" />
-            Edit fields
-          </button>
-          <button className="flex items-center gap-1.5 px-4 py-2.5 hover:bg-zinc-800 transition-colors">
-            <ArrowUpDown className="h-3.5 w-3.5 text-zinc-400" />
-            Change status
-          </button>
-          <div className="w-px h-8 bg-zinc-700" />
-          <button className="flex items-center gap-1.5 px-4 py-2.5 hover:bg-zinc-800 transition-colors text-red-400 hover:text-red-300">
-            <Trash2 className="h-3.5 w-3.5" />
-            Delete
-          </button>
-          <div className="w-px h-8 bg-zinc-700" />
-          {/* Dismiss */}
-          <button
-            onClick={() => setSelectedRows(new Set())}
-            className="px-3 py-2.5 hover:bg-zinc-800 transition-colors text-zinc-400 hover:text-white"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-      )}
+        )
+      })()}
 
       {/* View property drawer */}
       <ViewPropertyDrawer
