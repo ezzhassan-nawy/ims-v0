@@ -1395,6 +1395,17 @@ export function GroupedPropertiesView({
       {/* Header bar */}
       <div className="flex shrink-0 items-center justify-between rounded-xl border border-border bg-card px-4 py-3">
         <div className="flex items-center gap-2.5">
+          <Checkbox
+            checked={paginatedGroups.length > 0 && paginatedGroups.every((g) => selectedCards.has(g.id))}
+            onCheckedChange={(c) => {
+              setSelectedCards((prev) => {
+                const next = new Set(prev)
+                if (c) paginatedGroups.forEach((g) => next.add(g.id))
+                else paginatedGroups.forEach((g) => next.delete(g.id))
+                return next
+              })
+            }}
+          />
           <span className="text-sm font-semibold text-foreground">Grouped Properties</span>
           <Badge className="bg-blue-100 text-blue-700 border border-blue-200 hover:bg-blue-100 font-medium text-xs px-2">
             {filteredGroups.length.toLocaleString()}
@@ -1428,6 +1439,43 @@ export function GroupedPropertiesView({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      {/* Select-all-results banner */}
+      {(() => {
+        const pageFullySelected = paginatedGroups.length > 0 && paginatedGroups.every((g) => selectedCards.has(g.id))
+        const allResultsSelected = filteredGroups.length > 0 && filteredGroups.every((g) => selectedCards.has(g.id))
+        const hasMoreThanPage = filteredGroups.length > paginatedGroups.length
+        if (!pageFullySelected || !hasMoreThanPage) return null
+        return (
+          <div className="flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-xs dark:border-blue-900 dark:bg-blue-950/30">
+            {allResultsSelected ? (
+              <>
+                <span className="text-blue-800 dark:text-blue-200">
+                  All <strong>{filteredGroups.length.toLocaleString()}</strong> groups across all pages are selected.
+                </span>
+                <button
+                  onClick={() => setSelectedCards(new Set())}
+                  className="font-medium text-blue-700 underline underline-offset-2 hover:text-blue-900 dark:text-blue-300"
+                >
+                  Clear selection
+                </button>
+              </>
+            ) : (
+              <>
+                <span className="text-blue-800 dark:text-blue-200">
+                  All <strong>{paginatedGroups.length}</strong> on this page are selected.
+                </span>
+                <button
+                  onClick={() => setSelectedCards(new Set(filteredGroups.map((g) => g.id)))}
+                  className="font-medium text-blue-700 underline underline-offset-2 hover:text-blue-900 dark:text-blue-300"
+                >
+                  Select all {filteredGroups.length.toLocaleString()} groups
+                </button>
+              </>
+            )}
+          </div>
+        )
+      })()}
 
         <div className="space-y-4">
           {groupByColumn ? (() => {
@@ -1508,12 +1556,21 @@ export function GroupedPropertiesView({
             {/* Count + Select all */}
             <div className="flex items-center gap-3 px-4 py-2.5">
               <span className="font-semibold tabular-nums">{selectedCards.size} selected</span>
-              <button
-                onClick={() => setSelectedCards(new Set(filteredGroups.map(g => g.id)))}
-                className="text-zinc-400 hover:text-white transition-colors text-xs font-medium"
-              >
-                Select all {filteredGroups.length > selectedCards.size ? `(${filteredGroups.length})` : ""}
-              </button>
+              {filteredGroups.length > selectedCards.size ? (
+                <button
+                  onClick={() => setSelectedCards(new Set(filteredGroups.map(g => g.id)))}
+                  className="text-zinc-400 hover:text-white transition-colors text-xs font-medium"
+                >
+                  Select all {filteredGroups.length.toLocaleString()}
+                </button>
+              ) : (
+                <button
+                  onClick={() => setSelectedCards(new Set())}
+                  className="text-zinc-400 hover:text-white transition-colors text-xs font-medium"
+                >
+                  Clear
+                </button>
+              )}
             </div>
 
             <div className="w-px h-8 bg-zinc-700" />

@@ -3524,6 +3524,797 @@ function ConstructionProjectDrawer({
   )
 }
 
+// ─── Enriched Construction Data (Compound → Phase → Capture hierarchy) ───────
+
+type CompoundHealth = "Ahead" | "On Track" | "Monitor" | "Behind" | "Nearly Complete" | "Early Stage"
+type PhaseTrend = "Accelerating" | "Steady" | "Decelerating" | "Stalled" | "Recovering"
+
+interface PhaseCapture {
+  quarter: string
+  date: string
+  imageId: string
+  constructionPct: number
+  timelinePctAtCapture: number
+  gapAtCapture: number
+  categories: {
+    siteInfrastructure: number
+    structuralProgress: number
+    landscaping: number
+    waterFeatures: number
+  }
+  delta: {
+    period: string
+    delta: number
+    velocityQtly: number
+    pace: string
+    primaryDriver: string
+  } | null
+}
+
+interface CompoundPhase {
+  phaseId: string
+  phaseName: string
+  areaKm2: number
+  launchDate: string
+  minDeliveryDate: string
+  maxDeliveryDate: string
+  timelinePct: number
+  constructionPct: number
+  progressGap: number
+  health: CompoundHealth
+  captures: PhaseCapture[]
+  trend: PhaseTrend
+  narrative: string
+}
+
+interface Compound {
+  projectId: string
+  projectName: string
+  developer: DeveloperInfo
+  areaId: string
+  areaName: string
+  subAreaName: string
+  district: string
+  earliestLaunch: string
+  minDelivery: string
+  maxDelivery: string
+  totalAreaKm2: number
+  timelinePct: number
+  constructionPct: number
+  progressGap: number
+  health: CompoundHealth
+  phases: CompoundPhase[]
+  projectTimeline: { quarter: string; overallPct: number; timelinePct: number; gap: number }[]
+  projectNarrative: string
+}
+
+function classifyHealth(constructionPct: number, timelinePct: number): CompoundHealth {
+  if (constructionPct >= 90) return "Nearly Complete"
+  if (constructionPct < 15 && timelinePct < 15) return "Early Stage"
+  const gap = constructionPct - timelinePct
+  if (gap >= 15) return "Ahead"
+  if (gap >= -5) return "On Track"
+  if (gap >= -15) return "Monitor"
+  return "Behind"
+}
+
+function healthBadgeColor(h: CompoundHealth): string {
+  switch (h) {
+    case "Ahead":           return "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400"
+    case "On Track":        return "bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400"
+    case "Monitor":         return "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400"
+    case "Behind":          return "bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400"
+    case "Nearly Complete": return "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400"
+    case "Early Stage":     return "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-900/30 dark:text-slate-400"
+  }
+}
+
+function trendBadgeColor(t: PhaseTrend): string {
+  switch (t) {
+    case "Accelerating": return "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400"
+    case "Steady":       return "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400"
+    case "Decelerating": return "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400"
+    case "Stalled":      return "bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400"
+    case "Recovering":   return "bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-400"
+  }
+}
+
+function gapBarFillColor(gap: number): string {
+  if (gap >= 10) return "bg-emerald-500"
+  if (gap >= 0)  return "bg-green-500"
+  if (gap >= -10) return "bg-amber-500"
+  return "bg-red-500"
+}
+
+function computeTimelinePct(launchDate: string, maxDeliveryDate: string): number {
+  const tsLaunch = new Date(launchDate).getTime()
+  const tsMax    = new Date(maxDeliveryDate).getTime()
+  const span     = tsMax - tsLaunch
+  if (span <= 0) return 100
+  const elapsed  = TIMELINE_TODAY_MS - tsLaunch
+  return Math.round(Math.max(0, Math.min(100, (elapsed / span) * 100)))
+}
+
+function monthsUntil(dateStr: string): number {
+  const ts = new Date(dateStr).getTime()
+  return Math.round((ts - TIMELINE_TODAY_MS) / (30 * 864e5))
+}
+
+// ─── Enriched Mock Data (Compounds) ──────────────────────────────────────────
+
+const COMPOUNDS: Compound[] = (() => {
+  const devEmaar: DeveloperInfo   = { id: "DV-002", name: "Emaar Misr",               initials: "EM", color: "#b45309" }
+  const devPalm: DeveloperInfo    = { id: "DV-001", name: "Palm Hills Developments",  initials: "PH", color: "#0d6e4f" }
+  const devMV: DeveloperInfo      = { id: "DV-005", name: "Mountain View",            initials: "MV", color: "#059669" }
+  const devOra: DeveloperInfo     = { id: "DV-006", name: "Ora Developers",           initials: "OR", color: "#be185d" }
+  const devHyde: DeveloperInfo    = { id: "DV-004", name: "Hyde Park Developments",   initials: "HP", color: "#7c3aed" }
+
+  function mkPhase(p: {
+    phaseId: string; phaseName: string; areaKm2: number
+    launchDate: string; minDeliveryDate: string; maxDeliveryDate: string
+    captures: Omit<PhaseCapture, "timelinePctAtCapture" | "gapAtCapture">[]
+    trend: PhaseTrend; narrative: string
+  }): CompoundPhase {
+    const tlPct = computeTimelinePct(p.launchDate, p.maxDeliveryDate)
+    const filled = p.captures.map(c => {
+      const capTlPct = computeTimelinePct(p.launchDate, p.maxDeliveryDate)
+      return { ...c, timelinePctAtCapture: capTlPct, gapAtCapture: c.constructionPct - capTlPct }
+    })
+    const latest = filled[filled.length - 1]
+    const cPct = latest?.constructionPct ?? 0
+    const gap = cPct - tlPct
+    return {
+      phaseId: p.phaseId, phaseName: p.phaseName, areaKm2: p.areaKm2,
+      launchDate: p.launchDate, minDeliveryDate: p.minDeliveryDate, maxDeliveryDate: p.maxDeliveryDate,
+      timelinePct: tlPct, constructionPct: cPct, progressGap: gap,
+      health: classifyHealth(cPct, tlPct),
+      captures: filled, trend: p.trend, narrative: p.narrative,
+    }
+  }
+
+  function mkCompound(c: {
+    projectId: string; projectName: string; developer: DeveloperInfo
+    areaId: string; areaName: string; subAreaName: string
+    phases: CompoundPhase[]
+  }): Compound {
+    const phases = c.phases
+    const totalArea = phases.reduce((s, p) => s + p.areaKm2, 0)
+    const weightedConstruction = phases.reduce((s, p) => s + p.constructionPct * p.areaKm2, 0) / totalArea
+    const weightedTimeline     = phases.reduce((s, p) => s + p.timelinePct * p.areaKm2, 0) / totalArea
+    const cPct = Math.round(weightedConstruction)
+    const tPct = Math.round(weightedTimeline)
+    const gap = cPct - tPct
+
+    const launches   = phases.map(p => p.launchDate).sort()
+    const minDels    = phases.map(p => p.minDeliveryDate).sort()
+    const maxDels    = phases.map(p => p.maxDeliveryDate).sort()
+
+    // Build quarterly project-level timeline from all phase captures
+    const qMap = new Map<string, { totalPctArea: number; totalTlArea: number; totalArea: number }>()
+    for (const ph of phases) {
+      for (const cap of ph.captures) {
+        const e = qMap.get(cap.quarter) ?? { totalPctArea: 0, totalTlArea: 0, totalArea: 0 }
+        e.totalPctArea += cap.constructionPct * ph.areaKm2
+        e.totalTlArea  += cap.timelinePctAtCapture * ph.areaKm2
+        e.totalArea    += ph.areaKm2
+        qMap.set(cap.quarter, e)
+      }
+    }
+    const projectTimeline = Array.from(qMap.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([q, e]) => ({
+        quarter: q,
+        overallPct: Math.round(e.totalPctArea / e.totalArea),
+        timelinePct: Math.round(e.totalTlArea / e.totalArea),
+        gap: Math.round(e.totalPctArea / e.totalArea) - Math.round(e.totalTlArea / e.totalArea),
+      }))
+
+    const health = classifyHealth(cPct, tPct)
+    const projectNarrative = `${c.projectName} encompasses ${phases.length} active phases across ${totalArea.toFixed(2)} km². ` +
+      `The area-weighted construction stands at ${cPct}% against ${tPct}% of the timeline elapsed, ` +
+      `placing the project in "${health}" status. ` +
+      phases.map(p => `${p.phaseName} (${p.areaKm2.toFixed(2)} km²) is at ${p.constructionPct}% construction with a ${p.health} health rating.`).join(" ")
+
+    return {
+      projectId: c.projectId, projectName: c.projectName, developer: c.developer,
+      areaId: c.areaId, areaName: c.areaName, subAreaName: c.subAreaName,
+      district: deriveDistrict(c.areaName),
+      earliestLaunch: launches[0], minDelivery: minDels[0], maxDelivery: maxDels[maxDels.length - 1],
+      totalAreaKm2: totalArea, timelinePct: tPct, constructionPct: cPct, progressGap: gap, health,
+      phases, projectTimeline, projectNarrative,
+    }
+  }
+
+  // ── 1. Uptown Cairo ─────────────────────────────────────────────────────────
+  const uptownPhases = [
+    mkPhase({
+      phaseId: "PH-1408-A", phaseName: "Phase 1 — Levana", areaKm2: 2.1,
+      launchDate: "2019-06-01", minDeliveryDate: "2026-03-01", maxDeliveryDate: "2026-12-01",
+      captures: [
+        { quarter: "Q3 2023", date: "2023-08-12", imageId: "SAT-SIM-UC01", constructionPct: 18, categories: { siteInfrastructure: 45, structuralProgress: 12, landscaping: 4, waterFeatures: 2 }, delta: null },
+        { quarter: "Q4 2023", date: "2023-11-20", imageId: "SAT-SIM-UC02", constructionPct: 25, categories: { siteInfrastructure: 55, structuralProgress: 20, landscaping: 8, waterFeatures: 4 }, delta: { period: "Q3 → Q4 2023", delta: 7, velocityQtly: 7, pace: "Moderate", primaryDriver: "Structural Progress" } },
+        { quarter: "Q1 2024", date: "2024-02-15", imageId: "SAT-SIM-UC03", constructionPct: 34, categories: { siteInfrastructure: 66, structuralProgress: 30, landscaping: 14, waterFeatures: 8 }, delta: { period: "Q4 2023 → Q1 2024", delta: 9, velocityQtly: 9, pace: "Moderate", primaryDriver: "Structural Progress" } },
+        { quarter: "Q2 2024", date: "2024-05-18", imageId: "SAT-SIM-UC04", constructionPct: 42, categories: { siteInfrastructure: 74, structuralProgress: 40, landscaping: 22, waterFeatures: 14 }, delta: { period: "Q1 → Q2 2024", delta: 8, velocityQtly: 8, pace: "Moderate", primaryDriver: "Structural Progress" } },
+        { quarter: "Q4 2024", date: "2024-11-10", imageId: "SAT-SIM-UC05", constructionPct: 55, categories: { siteInfrastructure: 84, structuralProgress: 54, landscaping: 35, waterFeatures: 22 }, delta: { period: "Q2 → Q4 2024", delta: 13, velocityQtly: 6.5, pace: "Moderate", primaryDriver: "Landscaping" } },
+        { quarter: "Q2 2025", date: "2025-04-20", imageId: "SAT-2025-016", constructionPct: 68, categories: { siteInfrastructure: 91, structuralProgress: 68, landscaping: 48, waterFeatures: 32 }, delta: { period: "Q4 2024 → Q2 2025", delta: 13, velocityQtly: 6.5, pace: "Moderate", primaryDriver: "Structural Progress" } },
+      ],
+      trend: "Steady", narrative: "Levana has maintained a consistent build pace of approximately 7 points per quarter. Structural work is the dominant activity front, now past the two-thirds mark. Landscaping activation in completed zones is on schedule.",
+    }),
+    mkPhase({
+      phaseId: "PH-1408-B", phaseName: "Phase 2 — The Terraces", areaKm2: 2.6,
+      launchDate: "2021-01-01", minDeliveryDate: "2027-06-01", maxDeliveryDate: "2028-03-01",
+      captures: [
+        { quarter: "Q1 2024", date: "2024-03-05", imageId: "SAT-SIM-UC10", constructionPct: 14, categories: { siteInfrastructure: 38, structuralProgress: 8, landscaping: 2, waterFeatures: 1 }, delta: null },
+        { quarter: "Q3 2024", date: "2024-08-22", imageId: "SAT-SIM-UC11", constructionPct: 24, categories: { siteInfrastructure: 52, structuralProgress: 18, landscaping: 8, waterFeatures: 4 }, delta: { period: "Q1 → Q3 2024", delta: 10, velocityQtly: 5, pace: "Slow", primaryDriver: "Site Infrastructure" } },
+        { quarter: "Q1 2025", date: "2025-02-10", imageId: "SAT-SIM-UC12", constructionPct: 35, categories: { siteInfrastructure: 64, structuralProgress: 30, landscaping: 16, waterFeatures: 8 }, delta: { period: "Q3 2024 → Q1 2025", delta: 11, velocityQtly: 5.5, pace: "Moderate", primaryDriver: "Structural Progress" } },
+      ],
+      trend: "Accelerating", narrative: "The Terraces is ramping up after a slower initial phase. Site infrastructure is well-advanced and structural work has picked up meaningfully in the last two quarters.",
+    }),
+    mkPhase({
+      phaseId: "PH-1408-C", phaseName: "Phase 3 — The Residences", areaKm2: 2.45,
+      launchDate: "2022-06-01", minDeliveryDate: "2028-06-01", maxDeliveryDate: "2029-06-01",
+      captures: [
+        { quarter: "Q2 2024", date: "2024-05-25", imageId: "SAT-SIM-UC20", constructionPct: 8, categories: { siteInfrastructure: 22, structuralProgress: 4, landscaping: 1, waterFeatures: 0 }, delta: null },
+        { quarter: "Q4 2024", date: "2024-12-01", imageId: "SAT-SIM-UC21", constructionPct: 16, categories: { siteInfrastructure: 38, structuralProgress: 11, landscaping: 4, waterFeatures: 2 }, delta: { period: "Q2 → Q4 2024", delta: 8, velocityQtly: 4, pace: "Slow", primaryDriver: "Site Infrastructure" } },
+        { quarter: "Q2 2025", date: "2025-04-15", imageId: "SAT-SIM-UC22", constructionPct: 24, categories: { siteInfrastructure: 50, structuralProgress: 19, landscaping: 8, waterFeatures: 4 }, delta: { period: "Q4 2024 → Q2 2025", delta: 8, velocityQtly: 4, pace: "Slow", primaryDriver: "Site Infrastructure" } },
+      ],
+      trend: "Steady", narrative: "The Residences is in its early-to-mid construction phase with site infrastructure passing the 50% mark. Structural work is activating as the infrastructure network matures.",
+    }),
+  ]
+
+  const uptown = mkCompound({
+    projectId: "PJ-1408", projectName: "Uptown Cairo", developer: devEmaar,
+    areaId: "AR-001", areaName: "New Cairo", subAreaName: "Mokattam Hills",
+    phases: uptownPhases,
+  })
+
+  // ── 2. Palm Hills October ───────────────────────────────────────────────────
+  const palmOctPhases = [
+    mkPhase({
+      phaseId: "PH-0124-01", phaseName: "Phase 1 — Palm Valley", areaKm2: 1.85,
+      launchDate: "2019-11-01", minDeliveryDate: "2026-06-01", maxDeliveryDate: "2027-03-01",
+      captures: [
+        { quarter: "Q1 2024", date: "2024-02-20", imageId: "SAT-SIM-PO01", constructionPct: 48, categories: { siteInfrastructure: 82, structuralProgress: 46, landscaping: 28, waterFeatures: 18 }, delta: null },
+        { quarter: "Q3 2024", date: "2024-08-10", imageId: "SAT-SIM-PO02", constructionPct: 58, categories: { siteInfrastructure: 88, structuralProgress: 56, landscaping: 38, waterFeatures: 25 }, delta: { period: "Q1 → Q3 2024", delta: 10, velocityQtly: 5, pace: "Moderate", primaryDriver: "Structural Progress" } },
+        { quarter: "Q1 2025", date: "2025-01-18", imageId: "SAT-SIM-PO03", constructionPct: 68, categories: { siteInfrastructure: 93, structuralProgress: 67, landscaping: 50, waterFeatures: 35 }, delta: { period: "Q3 2024 → Q1 2025", delta: 10, velocityQtly: 5, pace: "Moderate", primaryDriver: "Landscaping" } },
+      ],
+      trend: "Steady", narrative: "Palm Valley is progressing consistently at approximately 5 points per quarter. Infrastructure is near-complete and landscaping has become the dominant activity front.",
+    }),
+    mkPhase({
+      phaseId: "PH-0124-02", phaseName: "Phase 2 — The Oasis", areaKm2: 1.39,
+      launchDate: "2020-11-15", minDeliveryDate: "2027-06-01", maxDeliveryDate: "2028-03-01",
+      captures: [
+        { quarter: "Q3 2023", date: "2023-09-05", imageId: "SAT-SIM-PO10", constructionPct: 22, categories: { siteInfrastructure: 50, structuralProgress: 16, landscaping: 8, waterFeatures: 4 }, delta: null },
+        { quarter: "Q1 2024", date: "2024-02-22", imageId: "SAT-SIM-PO11", constructionPct: 32, categories: { siteInfrastructure: 62, structuralProgress: 28, landscaping: 14, waterFeatures: 8 }, delta: { period: "Q3 2023 → Q1 2024", delta: 10, velocityQtly: 5, pace: "Moderate", primaryDriver: "Structural Progress" } },
+        { quarter: "Q3 2024", date: "2024-09-10", imageId: "SAT-SIM-PO12", constructionPct: 40, categories: { siteInfrastructure: 72, structuralProgress: 38, landscaping: 22, waterFeatures: 14 }, delta: { period: "Q1 → Q3 2024", delta: 8, velocityQtly: 4, pace: "Slow", primaryDriver: "Structural Progress" } },
+        { quarter: "Q2 2025", date: "2025-04-15", imageId: "SAT-2025-001", constructionPct: 48, categories: { siteInfrastructure: 80, structuralProgress: 46, landscaping: 28, waterFeatures: 18 }, delta: { period: "Q3 2024 → Q2 2025", delta: 8, velocityQtly: 2.7, pace: "Slow", primaryDriver: "Structural Progress" } },
+      ],
+      trend: "Decelerating", narrative: "The Oasis has seen a modest deceleration in pace over the last two quarters. Structural framing is active but the rate has slowed from the earlier ramp-up period.",
+    }),
+  ]
+
+  const palmOct = mkCompound({
+    projectId: "PJ-0124", projectName: "Palm Hills October", developer: devPalm,
+    areaId: "AR-006", areaName: "6th of October", subAreaName: "Golf District",
+    phases: palmOctPhases,
+  })
+
+  // ── 3. Marassi ──────────────────────────────────────────────────────────────
+  const marassiPhases = [
+    mkPhase({
+      phaseId: "PH-0055-03", phaseName: "Phase 3 — Marina", areaKm2: 2.4,
+      launchDate: "2019-01-01", minDeliveryDate: "2025-09-01", maxDeliveryDate: "2026-06-01",
+      captures: [
+        { quarter: "Q1 2023", date: "2023-03-15", imageId: "SAT-SIM-MA01", constructionPct: 44, categories: { siteInfrastructure: 75, structuralProgress: 42, landscaping: 28, waterFeatures: 20 }, delta: null },
+        { quarter: "Q3 2023", date: "2023-09-10", imageId: "SAT-SIM-MA02", constructionPct: 56, categories: { siteInfrastructure: 84, structuralProgress: 55, landscaping: 38, waterFeatures: 30 }, delta: { period: "Q1 → Q3 2023", delta: 12, velocityQtly: 6, pace: "Moderate", primaryDriver: "Structural Progress" } },
+        { quarter: "Q1 2024", date: "2024-02-08", imageId: "SAT-SIM-MA03", constructionPct: 68, categories: { siteInfrastructure: 92, structuralProgress: 68, landscaping: 50, waterFeatures: 42 }, delta: { period: "Q3 2023 → Q1 2024", delta: 12, velocityQtly: 6, pace: "Moderate", primaryDriver: "Landscaping" } },
+        { quarter: "Q3 2024", date: "2024-08-18", imageId: "SAT-SIM-MA04", constructionPct: 80, categories: { siteInfrastructure: 96, structuralProgress: 82, landscaping: 65, waterFeatures: 56 }, delta: { period: "Q1 → Q3 2024", delta: 12, velocityQtly: 6, pace: "Moderate", primaryDriver: "Water Features" } },
+        { quarter: "Q1 2025", date: "2025-02-20", imageId: "SAT-SIM-MA05", constructionPct: 88, categories: { siteInfrastructure: 98, structuralProgress: 90, landscaping: 78, waterFeatures: 68 }, delta: { period: "Q3 2024 → Q1 2025", delta: 8, velocityQtly: 4, pace: "Moderate", primaryDriver: "Landscaping" } },
+      ],
+      trend: "Steady", narrative: "Marina is approaching completion with nearly all infrastructure finished and structural work at 90%. The focus has shifted to landscaping and waterfront features as the phase enters its final stage.",
+    }),
+    mkPhase({
+      phaseId: "PH-0055-04", phaseName: "Phase 4 — Bayview", areaKm2: 2.8,
+      launchDate: "2020-06-01", minDeliveryDate: "2026-12-01", maxDeliveryDate: "2027-09-01",
+      captures: [
+        { quarter: "Q2 2023", date: "2023-05-12", imageId: "SAT-SIM-MA10", constructionPct: 22, categories: { siteInfrastructure: 48, structuralProgress: 18, landscaping: 8, waterFeatures: 4 }, delta: null },
+        { quarter: "Q4 2023", date: "2023-12-05", imageId: "SAT-SIM-MA11", constructionPct: 34, categories: { siteInfrastructure: 60, structuralProgress: 30, landscaping: 16, waterFeatures: 10 }, delta: { period: "Q2 → Q4 2023", delta: 12, velocityQtly: 6, pace: "Moderate", primaryDriver: "Structural Progress" } },
+        { quarter: "Q2 2024", date: "2024-06-15", imageId: "SAT-SIM-MA12", constructionPct: 48, categories: { siteInfrastructure: 74, structuralProgress: 46, landscaping: 28, waterFeatures: 20 }, delta: { period: "Q4 2023 → Q2 2024", delta: 14, velocityQtly: 7, pace: "Fast", primaryDriver: "Structural Progress" } },
+        { quarter: "Q1 2025", date: "2025-03-10", imageId: "SAT-SIM-MA13", constructionPct: 62, categories: { siteInfrastructure: 85, structuralProgress: 62, landscaping: 40, waterFeatures: 32 }, delta: { period: "Q2 2024 → Q1 2025", delta: 14, velocityQtly: 4.7, pace: "Moderate", primaryDriver: "Landscaping" } },
+      ],
+      trend: "Steady", narrative: "Bayview is maintaining a consistent pace with strong structural momentum. Landscaping has been activated across early-completing residential clusters.",
+    }),
+    mkPhase({
+      phaseId: "PH-0055-05", phaseName: "Phase 5 — Lagoon Villas", areaKm2: 2.62,
+      launchDate: "2021-06-01", minDeliveryDate: "2027-12-01", maxDeliveryDate: "2028-09-01",
+      captures: [
+        { quarter: "Q4 2023", date: "2023-11-22", imageId: "SAT-SIM-MA20", constructionPct: 14, categories: { siteInfrastructure: 35, structuralProgress: 10, landscaping: 4, waterFeatures: 2 }, delta: null },
+        { quarter: "Q2 2024", date: "2024-05-28", imageId: "SAT-SIM-MA21", constructionPct: 26, categories: { siteInfrastructure: 50, structuralProgress: 22, landscaping: 10, waterFeatures: 6 }, delta: { period: "Q4 2023 → Q2 2024", delta: 12, velocityQtly: 6, pace: "Moderate", primaryDriver: "Site Infrastructure" } },
+        { quarter: "Q1 2025", date: "2025-03-15", imageId: "SAT-2025-002", constructionPct: 38, categories: { siteInfrastructure: 65, structuralProgress: 35, landscaping: 18, waterFeatures: 12 }, delta: { period: "Q2 2024 → Q1 2025", delta: 12, velocityQtly: 4, pace: "Moderate", primaryDriver: "Structural Progress" } },
+      ],
+      trend: "Steady", narrative: "Lagoon Villas is progressing through its mid-stage construction with infrastructure well-advanced and structural work gaining momentum across the villa clusters.",
+    }),
+  ]
+
+  const marassi = mkCompound({
+    projectId: "PJ-0055", projectName: "Marassi", developer: devEmaar,
+    areaId: "AR-014", areaName: "Sahel", subAreaName: "Sidi Abdel Rahman",
+    phases: marassiPhases,
+  })
+
+  // ── 4. Mountain View iCity ──────────────────────────────────────────────────
+  const mvICityPhases = [
+    mkPhase({
+      phaseId: "PH-0312-03", phaseName: "Phase 3 — Club Park", areaKm2: 2.1,
+      launchDate: "2020-06-01", minDeliveryDate: "2026-06-01", maxDeliveryDate: "2027-03-01",
+      captures: [
+        { quarter: "Q2 2023", date: "2023-06-10", imageId: "SAT-SIM-MV01", constructionPct: 25, categories: { siteInfrastructure: 55, structuralProgress: 20, landscaping: 10, waterFeatures: 6 }, delta: null },
+        { quarter: "Q4 2023", date: "2023-12-12", imageId: "SAT-SIM-MV02", constructionPct: 35, categories: { siteInfrastructure: 66, structuralProgress: 32, landscaping: 18, waterFeatures: 10 }, delta: { period: "Q2 → Q4 2023", delta: 10, velocityQtly: 5, pace: "Moderate", primaryDriver: "Structural Progress" } },
+        { quarter: "Q2 2024", date: "2024-06-08", imageId: "SAT-SIM-MV03", constructionPct: 44, categories: { siteInfrastructure: 76, structuralProgress: 42, landscaping: 26, waterFeatures: 16 }, delta: { period: "Q4 2023 → Q2 2024", delta: 9, velocityQtly: 4.5, pace: "Moderate", primaryDriver: "Structural Progress" } },
+        { quarter: "Q1 2025", date: "2025-02-24", imageId: "SAT-2025-005", constructionPct: 55, categories: { siteInfrastructure: 85, structuralProgress: 54, landscaping: 36, waterFeatures: 22 }, delta: { period: "Q2 2024 → Q1 2025", delta: 11, velocityQtly: 3.7, pace: "Slow", primaryDriver: "Landscaping" } },
+      ],
+      trend: "Decelerating", narrative: "Club Park has seen a gradual deceleration in quarterly velocity despite consistent overall gains. Infrastructure is near-complete and the focus is shifting to landscaping.",
+    }),
+    mkPhase({
+      phaseId: "PH-0312-04", phaseName: "Phase 4 — The Lake District", areaKm2: 2.18,
+      launchDate: "2021-02-01", minDeliveryDate: "2027-03-01", maxDeliveryDate: "2027-12-01",
+      captures: [
+        { quarter: "Q3 2023", date: "2023-08-20", imageId: "SAT-SIM-MV10", constructionPct: 18, categories: { siteInfrastructure: 42, structuralProgress: 14, landscaping: 6, waterFeatures: 3 }, delta: null },
+        { quarter: "Q1 2024", date: "2024-01-28", imageId: "SAT-SIM-MV11", constructionPct: 26, categories: { siteInfrastructure: 54, structuralProgress: 22, landscaping: 12, waterFeatures: 6 }, delta: { period: "Q3 2023 → Q1 2024", delta: 8, velocityQtly: 4, pace: "Slow", primaryDriver: "Site Infrastructure" } },
+        { quarter: "Q3 2024", date: "2024-09-15", imageId: "SAT-SIM-MV12", constructionPct: 35, categories: { siteInfrastructure: 66, structuralProgress: 32, landscaping: 18, waterFeatures: 10 }, delta: { period: "Q1 → Q3 2024", delta: 9, velocityQtly: 4.5, pace: "Moderate", primaryDriver: "Structural Progress" } },
+        { quarter: "Q2 2025", date: "2025-04-10", imageId: "SAT-SIM-MV13", constructionPct: 42, categories: { siteInfrastructure: 74, structuralProgress: 40, landscaping: 24, waterFeatures: 14 }, delta: { period: "Q3 2024 → Q2 2025", delta: 7, velocityQtly: 2.3, pace: "Slow", primaryDriver: "Structural Progress" } },
+      ],
+      trend: "Decelerating", narrative: "The Lake District has experienced a slowdown in construction velocity over the last two quarters. Infrastructure is progressing but structural work has not accelerated as expected.",
+    }),
+  ]
+
+  const mvICity = mkCompound({
+    projectId: "PJ-0312", projectName: "Mountain View iCity", developer: devMV,
+    areaId: "AR-001", areaName: "New Cairo", subAreaName: "5th Settlement",
+    phases: mvICityPhases,
+  })
+
+  // ── 5. Badya ────────────────────────────────────────────────────────────────
+  const badyaPhases = [
+    mkPhase({
+      phaseId: "PH-1002-01", phaseName: "Phase 1 — The Core", areaKm2: 2.8,
+      launchDate: "2020-02-01", minDeliveryDate: "2026-06-01", maxDeliveryDate: "2027-06-01",
+      captures: [
+        { quarter: "Q2 2023", date: "2023-05-18", imageId: "SAT-SIM-BD01", constructionPct: 20, categories: { siteInfrastructure: 48, structuralProgress: 16, landscaping: 6, waterFeatures: 3 }, delta: null },
+        { quarter: "Q4 2023", date: "2023-11-25", imageId: "SAT-SIM-BD02", constructionPct: 30, categories: { siteInfrastructure: 60, structuralProgress: 26, landscaping: 14, waterFeatures: 8 }, delta: { period: "Q2 → Q4 2023", delta: 10, velocityQtly: 5, pace: "Moderate", primaryDriver: "Structural Progress" } },
+        { quarter: "Q2 2024", date: "2024-06-05", imageId: "SAT-SIM-BD03", constructionPct: 40, categories: { siteInfrastructure: 72, structuralProgress: 38, landscaping: 22, waterFeatures: 14 }, delta: { period: "Q4 2023 → Q2 2024", delta: 10, velocityQtly: 5, pace: "Moderate", primaryDriver: "Structural Progress" } },
+        { quarter: "Q1 2025", date: "2025-02-15", imageId: "SAT-SIM-BD04", constructionPct: 50, categories: { siteInfrastructure: 82, structuralProgress: 48, landscaping: 32, waterFeatures: 20 }, delta: { period: "Q2 2024 → Q1 2025", delta: 10, velocityQtly: 3.3, pace: "Slow", primaryDriver: "Landscaping" } },
+      ],
+      trend: "Steady", narrative: "The Core has maintained a consistent 10-point gain every two quarters. Structural work is nearing 50% and landscaping is being activated in completed zones.",
+    }),
+    mkPhase({
+      phaseId: "PH-1002-02", phaseName: "Phase 2 — Green Valley", areaKm2: 3.12,
+      launchDate: "2021-02-01", minDeliveryDate: "2027-06-01", maxDeliveryDate: "2028-03-01",
+      captures: [
+        { quarter: "Q1 2024", date: "2024-01-20", imageId: "SAT-SIM-BD10", constructionPct: 15, categories: { siteInfrastructure: 38, structuralProgress: 10, landscaping: 4, waterFeatures: 2 }, delta: null },
+        { quarter: "Q3 2024", date: "2024-08-14", imageId: "SAT-2024-012", constructionPct: 25, categories: { siteInfrastructure: 52, structuralProgress: 20, landscaping: 10, waterFeatures: 6 }, delta: { period: "Q1 → Q3 2024", delta: 10, velocityQtly: 5, pace: "Moderate", primaryDriver: "Site Infrastructure" } },
+        { quarter: "Q1 2025", date: "2025-03-10", imageId: "SAT-SIM-BD12", constructionPct: 34, categories: { siteInfrastructure: 64, structuralProgress: 30, landscaping: 16, waterFeatures: 10 }, delta: { period: "Q3 2024 → Q1 2025", delta: 9, velocityQtly: 4.5, pace: "Moderate", primaryDriver: "Structural Progress" } },
+      ],
+      trend: "Steady", narrative: "Green Valley is progressing at a moderate pace with consistent gains across all categories. Infrastructure is well-advanced at 64% and structural work has crossed the 30% threshold.",
+    }),
+    mkPhase({
+      phaseId: "PH-1002-03", phaseName: "Phase 3 — The Gardens", areaKm2: 2.42,
+      launchDate: "2022-06-01", minDeliveryDate: "2028-06-01", maxDeliveryDate: "2029-06-01",
+      captures: [
+        { quarter: "Q3 2024", date: "2024-07-28", imageId: "SAT-SIM-BD20", constructionPct: 8, categories: { siteInfrastructure: 22, structuralProgress: 4, landscaping: 1, waterFeatures: 0 }, delta: null },
+        { quarter: "Q1 2025", date: "2025-02-22", imageId: "SAT-SIM-BD21", constructionPct: 18, categories: { siteInfrastructure: 40, structuralProgress: 14, landscaping: 5, waterFeatures: 2 }, delta: { period: "Q3 2024 → Q1 2025", delta: 10, velocityQtly: 5, pace: "Moderate", primaryDriver: "Site Infrastructure" } },
+      ],
+      trend: "Accelerating", narrative: "The Gardens is in its early construction phase with site infrastructure advancing rapidly. The initial 10-point gain in two quarters suggests a strong ramp-up.",
+    }),
+  ]
+
+  const badya = mkCompound({
+    projectId: "PJ-1002", projectName: "Badya", developer: devOra,
+    areaId: "AR-006", areaName: "6th of October", subAreaName: "Golf District",
+    phases: badyaPhases,
+  })
+
+  // ── 6. Hyde Park Estate ─────────────────────────────────────────────────────
+  const hydeParkPhases = [
+    mkPhase({
+      phaseId: "PH-0201-02", phaseName: "Phase 2 — Park Avenue", areaKm2: 2.6,
+      launchDate: "2020-11-01", minDeliveryDate: "2026-09-01", maxDeliveryDate: "2027-06-01",
+      captures: [
+        { quarter: "Q1 2023", date: "2023-02-10", imageId: "SAT-SIM-HP01", constructionPct: 22, categories: { siteInfrastructure: 50, structuralProgress: 18, landscaping: 8, waterFeatures: 4 }, delta: null },
+        { quarter: "Q3 2023", date: "2023-08-18", imageId: "SAT-SIM-HP02", constructionPct: 32, categories: { siteInfrastructure: 62, structuralProgress: 28, landscaping: 16, waterFeatures: 8 }, delta: { period: "Q1 → Q3 2023", delta: 10, velocityQtly: 5, pace: "Moderate", primaryDriver: "Structural Progress" } },
+        { quarter: "Q1 2024", date: "2024-01-22", imageId: "SAT-SIM-HP03", constructionPct: 42, categories: { siteInfrastructure: 74, structuralProgress: 40, landscaping: 24, waterFeatures: 14 }, delta: { period: "Q3 2023 → Q1 2024", delta: 10, velocityQtly: 5, pace: "Moderate", primaryDriver: "Structural Progress" } },
+        { quarter: "Q3 2024", date: "2024-09-05", imageId: "SAT-SIM-HP04", constructionPct: 52, categories: { siteInfrastructure: 84, structuralProgress: 52, landscaping: 34, waterFeatures: 22 }, delta: { period: "Q1 → Q3 2024", delta: 10, velocityQtly: 5, pace: "Moderate", primaryDriver: "Structural Progress" } },
+        { quarter: "Q2 2025", date: "2025-04-05", imageId: "SAT-SIM-HP05", constructionPct: 64, categories: { siteInfrastructure: 91, structuralProgress: 64, landscaping: 45, waterFeatures: 30 }, delta: { period: "Q3 2024 → Q2 2025", delta: 12, velocityQtly: 4, pace: "Moderate", primaryDriver: "Landscaping" } },
+      ],
+      trend: "Steady", narrative: "Park Avenue has demonstrated remarkable consistency with 10-12 point gains every two quarters. Infrastructure is near completion and landscaping has become a significant activity front.",
+    }),
+    mkPhase({
+      phaseId: "PH-0201-03", phaseName: "Phase 3 — Central Park", areaKm2: 2.81,
+      launchDate: "2021-11-01", minDeliveryDate: "2027-06-01", maxDeliveryDate: "2028-03-01",
+      captures: [
+        { quarter: "Q2 2023", date: "2023-05-15", imageId: "SAT-SIM-HP10", constructionPct: 10, categories: { siteInfrastructure: 28, structuralProgress: 6, landscaping: 2, waterFeatures: 1 }, delta: null },
+        { quarter: "Q4 2023", date: "2023-12-08", imageId: "SAT-SIM-HP11", constructionPct: 20, categories: { siteInfrastructure: 44, structuralProgress: 16, landscaping: 8, waterFeatures: 4 }, delta: { period: "Q2 → Q4 2023", delta: 10, velocityQtly: 5, pace: "Moderate", primaryDriver: "Site Infrastructure" } },
+        { quarter: "Q2 2024", date: "2024-06-20", imageId: "SAT-SIM-HP12", constructionPct: 30, categories: { siteInfrastructure: 58, structuralProgress: 26, landscaping: 16, waterFeatures: 8 }, delta: { period: "Q4 2023 → Q2 2024", delta: 10, velocityQtly: 5, pace: "Moderate", primaryDriver: "Structural Progress" } },
+        { quarter: "Q1 2025", date: "2025-03-18", imageId: "SAT-2025-004", constructionPct: 42, categories: { siteInfrastructure: 72, structuralProgress: 40, landscaping: 24, waterFeatures: 14 }, delta: { period: "Q2 2024 → Q1 2025", delta: 12, velocityQtly: 4, pace: "Moderate", primaryDriver: "Structural Progress" } },
+      ],
+      trend: "Accelerating", narrative: "Central Park has been gaining momentum with the latest quarter showing a 12-point jump versus the prior 10-point average. Structural work is the dominant driver as the phase enters mid-construction.",
+    }),
+  ]
+
+  const hydePark = mkCompound({
+    projectId: "PJ-0201", projectName: "Hyde Park Estate", developer: devHyde,
+    areaId: "AR-001", areaName: "New Cairo", subAreaName: "5th Settlement",
+    phases: hydeParkPhases,
+  })
+
+  // ── ZED by Ora Developers: no phases — direct project-level analysis ──
+  // SAT-2025-008 in SATELLITE_IMAGES maps to PJ-0610
+  const zedTimeline = computeTimelinePct("2023-03-01", "2029-03-01")
+  const zed: Compound = {
+    projectId: "PJ-0610", projectName: "ZED", developer: { id:"DV-006", name:"Ora Developers", initials:"OR", color:"#be185d" },
+    areaId: "AR-009", areaName: "Sheikh Zayed", subAreaName: "Beverly Hills", district: "West Cairo",
+    earliestLaunch: "2023-03-01", minDelivery: "2028-06-01", maxDelivery: "2029-03-01",
+    totalAreaKm2: 3.62, timelinePct: zedTimeline, constructionPct: 29,
+    progressGap: 29 - zedTimeline,
+    health: classifyHealth(29, zedTimeline),
+    phases: [],   // ← no phases: analysis is directly at project level
+    projectTimeline: [
+      { quarter: "Q1 2025", overallPct: 22, timelinePct: Math.round(computeTimelinePct("2023-03-01", "2029-03-01") * 0.8), gap: 22 - Math.round(computeTimelinePct("2023-03-01", "2029-03-01") * 0.8) },
+      { quarter: "Q2 2025", overallPct: 29, timelinePct: zedTimeline, gap: 29 - zedTimeline },
+    ],
+    projectNarrative: "ZED is in early construction phase with site infrastructure well underway across approximately 64% of the site. Structural activity is limited to foundations and ground-level framing in the south-facing cluster. At 29% overall construction with " + Math.round(monthsUntil("2028-06-01")) + " months to minimum delivery, the project is currently on track — it has more than enough runway to reach completion at the current pace.",
+  }
+
+  return [uptown, palmOct, marassi, mvICity, badya, hydePark, zed].sort((a, b) => a.projectName.localeCompare(b.projectName))
+})()
+
+// ─── Two-Track Progress Bar ──────────────────────────────────────────────────
+
+function TwoTrackBar({
+  constructionPct, timelinePct, gap, label, compact = false,
+}: {
+  constructionPct: number; timelinePct: number; gap: number; label?: string; compact?: boolean
+}) {
+  const fillColor = gapBarFillColor(gap)
+  const todayLeft  = Math.min(100, Math.max(0, timelinePct))
+  return (
+    <div className={cn("space-y-1", compact ? "" : "")}>
+      {label && <p className="text-[10px] text-muted-foreground mb-0.5">{label}</p>}
+      <div className="relative">
+        {/* Track */}
+        <div className="h-2 rounded-full bg-muted relative overflow-visible">
+          {/* Construction fill */}
+          <div className={cn("absolute left-0 top-0 h-full rounded-full transition-all", fillColor)} style={{ width: `${constructionPct}%` }} />
+        </div>
+        {/* Today marker (timeline %) */}
+        <div className="absolute top-1/2 -translate-y-1/2" style={{ left: `${todayLeft}%` }}>
+          <div className="w-0.5 h-4 bg-foreground rounded-full -translate-x-1/2" />
+        </div>
+      </div>
+      <div className={cn("flex items-center justify-between", compact ? "text-[10px]" : "text-[11px]")}>
+        <span className="text-muted-foreground tabular-nums">
+          <span className="font-semibold text-foreground">{constructionPct}%</span> built
+        </span>
+        <span className="text-muted-foreground tabular-nums">
+          {timelinePct}% of timeline
+        </span>
+      </div>
+    </div>
+  )
+}
+
+// ─── Compound Drawer ─────────────────────────────────────────────────────────
+
+function CompoundDrawer({
+  compound, open, onClose, onViewImage,
+}: {
+  compound: Compound | null; open: boolean; onClose: () => void
+  onViewImage: (imageId: string, capture: PhaseCapture, phase: CompoundPhase) => void
+}) {
+  if (!compound) return <Sheet open={false} onOpenChange={() => {}}><SheetContent className="w-[640px] sm:max-w-[640px]" /></Sheet>
+
+  const monthsLeft = monthsUntil(compound.maxDelivery)
+
+  return (
+    <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
+      <SheetContent className="w-[680px] sm:max-w-[680px] flex flex-col p-0">
+        <SheetHeader className="px-6 py-4 border-b border-border shrink-0 space-y-1.5">
+          <div className="flex items-center gap-2 flex-wrap">
+            <CopyId value={compound.projectId} className="font-semibold text-foreground text-xs" />
+            <AreaTag areaName={compound.areaName} />
+            <Badge variant="outline" className={cn("text-[11px] px-1.5 py-0", healthBadgeColor(compound.health))}>{compound.health}</Badge>
+          </div>
+          <SheetTitle className="text-base font-semibold">{compound.projectName}</SheetTitle>
+          <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
+            <span>{compound.developer.name}</span>
+            <span>·</span>
+            <span>{compound.phases.length} phases</span>
+            <span>·</span>
+            <span>{compound.totalAreaKm2.toFixed(2)} km²</span>
+            {compound.subAreaName && <><span>·</span><span>{compound.subAreaName}</span></>}
+          </div>
+          <div className="pt-2">
+            <TwoTrackBar constructionPct={compound.constructionPct} timelinePct={compound.timelinePct} gap={compound.progressGap} />
+          </div>
+          <div className="flex items-center gap-2 text-[11px]">
+            <span className={cn("font-medium tabular-nums", compound.progressGap >= 0 ? "text-green-600" : "text-amber-600")}>
+              {compound.progressGap >= 0 ? `+${compound.progressGap}` : compound.progressGap} pts gap
+            </span>
+            <span className="text-muted-foreground">·</span>
+            <span className="text-muted-foreground tabular-nums">
+              {monthsLeft > 0 ? `${monthsLeft}mo to max delivery` : `${Math.abs(monthsLeft)}mo past delivery`}
+            </span>
+          </div>
+        </SheetHeader>
+
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+
+          {/* ── Overall category breakdown (from latest captures across phases or direct project) ── */}
+          {(() => {
+            // Gather categories: for phased projects use latest capture of most advanced phase,
+            // for no-phase projects use CONSTRUCTION_ANALYSIS of latest image
+            const allProjImgs = SATELLITE_IMAGES.filter(img => img.projectId === compound.projectId)
+              .sort((a, b) => b.capturedAt.localeCompare(a.capturedAt))
+            const latestDirectAnalysis = allProjImgs[0] ? CONSTRUCTION_ANALYSIS[allProjImgs[0].id] : null
+            const latestPhaseCapture = compound.phases.length > 0
+              ? compound.phases.flatMap(p => p.captures).sort((a, b) => b.date.localeCompare(a.date))[0]
+              : null
+            const cats = latestPhaseCapture
+              ? CAT_LABELS.map(({ key, label }) => ({ label, val: latestPhaseCapture.categories[key] }))
+              : latestDirectAnalysis
+              ? CAT_LABELS.map(({ key, label }) => ({ label, val: latestDirectAnalysis.categories[key].pct }))
+              : null
+            if (!cats) return null
+            return (
+              <div className="space-y-2.5">
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Category Breakdown</p>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+                  {cats.map(({ label, val }) => (
+                    <div key={label} className="space-y-1">
+                      <div className="flex justify-between text-[11px]">
+                        <span className="text-muted-foreground">{label}</span>
+                        <span className="font-semibold tabular-nums">{val}% <span className="text-muted-foreground/60 font-normal text-[10px]">{catLabel(val)}</span></span>
+                      </div>
+                      <div className="relative h-1.5 rounded-full bg-muted overflow-hidden">
+                        <div className={cn("absolute h-full rounded-full", val >= 80 ? "bg-green-500" : val >= 50 ? "bg-blue-500" : val >= 20 ? "bg-amber-500" : "bg-red-400")} style={{ width:`${val}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
+
+          <Separator />
+
+          {/* ── Quarterly progress dots (from projectTimeline or from direct images) ── */}
+          {(() => {
+            const hasTimeline = compound.projectTimeline.length > 1
+            const directImgs = compound.phases.length === 0
+              ? SATELLITE_IMAGES.filter(img => img.projectId === compound.projectId).sort((a, b) => a.capturedAt.localeCompare(b.capturedAt))
+              : []
+            if (!hasTimeline && directImgs.length === 0) return null
+            return (
+              <div className="space-y-2">
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Quarterly Progress</p>
+                <div className="flex items-center gap-1 flex-wrap">
+                  {hasTimeline
+                    ? compound.projectTimeline.map((pt, i, arr) => (
+                        <React.Fragment key={pt.quarter}>
+                          <div className="flex flex-col items-center">
+                            <div className={cn("w-3 h-3 rounded-full", i === arr.length - 1 ? "bg-primary" : "bg-muted-foreground/40")} />
+                            <span className="text-[8px] text-muted-foreground mt-0.5 whitespace-nowrap">{pt.quarter}</span>
+                            <span className="text-[9px] font-semibold tabular-nums">{pt.overallPct}%</span>
+                          </div>
+                          {i < arr.length - 1 && (
+                            <div className="flex flex-col items-center px-1">
+                              <div className="w-6 h-px bg-border" />
+                              <span className="text-[8px] text-green-600 font-medium">+{arr[i+1].overallPct - pt.overallPct}</span>
+                            </div>
+                          )}
+                        </React.Fragment>
+                      ))
+                    : directImgs.map((img, i, arr) => (
+                        <React.Fragment key={img.id}>
+                          <button
+                            onClick={() => onViewImage(img.id, { quarter: toQuarter(img.capturedAt), date: img.capturedAt.split(" ")[0], imageId: img.id, constructionPct: CONSTRUCTION_ANALYSIS[img.id]?.overallPct ?? 0, timelinePctAtCapture: 0, gapAtCapture: 0, categories: CONSTRUCTION_ANALYSIS[img.id]?.categories ? { siteInfrastructure: CONSTRUCTION_ANALYSIS[img.id].categories.siteInfrastructure.pct, structuralProgress: CONSTRUCTION_ANALYSIS[img.id].categories.structuralProgress.pct, landscaping: CONSTRUCTION_ANALYSIS[img.id].categories.landscaping.pct, waterFeatures: CONSTRUCTION_ANALYSIS[img.id].categories.waterFeatures.pct } : { siteInfrastructure:0, structuralProgress:0, landscaping:0, waterFeatures:0 }, delta: null }, compound.phases[0] ?? { phaseId:"", phaseName:"", areaKm2: compound.totalAreaKm2, launchDate: compound.earliestLaunch, minDeliveryDate: compound.minDelivery, maxDeliveryDate: compound.maxDelivery, timelinePct: compound.timelinePct, constructionPct: compound.constructionPct, progressGap: compound.progressGap, health: compound.health as CompoundHealth, captures: [], trend:"Steady", narrative:"" })}
+                            className="flex flex-col items-center group/dot hover:opacity-80 transition-opacity"
+                            title={`View ${toQuarter(img.capturedAt)}`}
+                          >
+                            <div className={cn("w-3 h-3 rounded-full ring-2 ring-transparent group-hover/dot:ring-primary/40 transition-all", i === arr.length - 1 ? "bg-primary" : "bg-muted-foreground/40")} />
+                            <span className="text-[8px] text-muted-foreground mt-0.5 whitespace-nowrap">{toQuarter(img.capturedAt)}</span>
+                            <span className="text-[9px] font-semibold tabular-nums">{CONSTRUCTION_ANALYSIS[img.id]?.overallPct ?? "—"}%</span>
+                          </button>
+                          {i < arr.length - 1 && <div className="w-6 h-px bg-border mx-1 mt-1" />}
+                        </React.Fragment>
+                      ))
+                  }
+                </div>
+              </div>
+            )
+          })()}
+
+          <Separator />
+
+          {/* ── Compact images table ── */}
+          {(() => {
+            const imgs = SATELLITE_IMAGES.filter(img => img.projectId === compound.projectId)
+              .sort((a, b) => b.capturedAt.localeCompare(a.capturedAt))
+            if (imgs.length === 0) return null
+            return (
+              <div className="space-y-2">
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Images Taken</p>
+                <div className="rounded-lg border border-border overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="text-left px-3 py-2 font-medium text-muted-foreground">Image</th>
+                        <th className="text-left px-3 py-2 font-medium text-muted-foreground">Quarter</th>
+                        <th className="text-left px-3 py-2 font-medium text-muted-foreground">Quality</th>
+                        <th className="text-right px-3 py-2 font-medium text-muted-foreground">Progress</th>
+                        <th className="px-2 py-2 w-8" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {imgs.map(img => {
+                        const a = CONSTRUCTION_ANALYSIS[img.id]
+                        return (
+                          <tr key={img.id}
+                            className="border-t border-border hover:bg-muted/30 cursor-pointer group/row transition-colors"
+                            onClick={() => onViewImage(img.id, { quarter: toQuarter(img.capturedAt), date: img.capturedAt.split(" ")[0], imageId: img.id, constructionPct: a?.overallPct ?? 0, timelinePctAtCapture: 0, gapAtCapture: 0, categories: a?.categories ? { siteInfrastructure: a.categories.siteInfrastructure.pct, structuralProgress: a.categories.structuralProgress.pct, landscaping: a.categories.landscaping.pct, waterFeatures: a.categories.waterFeatures.pct } : { siteInfrastructure:0, structuralProgress:0, landscaping:0, waterFeatures:0 }, delta: null }, compound.phases[0] ?? { phaseId:"", phaseName:"", areaKm2: compound.totalAreaKm2, launchDate: compound.earliestLaunch, minDeliveryDate: compound.minDelivery, maxDeliveryDate: compound.maxDelivery, timelinePct: compound.timelinePct, constructionPct: compound.constructionPct, progressGap: compound.progressGap, health: compound.health as CompoundHealth, captures: [], trend:"Steady", narrative:"" })}
+                          >
+                            <td className="px-3 py-2 font-mono text-primary">{img.id}</td>
+                            <td className="px-3 py-2 text-muted-foreground">{toQuarter(img.capturedAt)}</td>
+                            <td className="px-3 py-2"><QualityBadge quality={img.quality} /></td>
+                            <td className="px-3 py-2 text-right font-semibold tabular-nums">{a?.overallPct ?? "—"}%</td>
+                            <td className="px-2 py-2"><Eye className="h-3.5 w-3.5 text-muted-foreground group-hover/row:text-foreground transition-colors" /></td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )
+          })()}
+
+          <Separator />
+
+          {/* ── Project Narrative ── */}
+          <div className="space-y-2">
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Project Narrative</p>
+            <p className="text-sm text-foreground leading-relaxed">{compound.projectNarrative}</p>
+          </div>
+
+          <Separator />
+
+          {/* ── Phases ── */}
+          {compound.phases.map(phase => {
+            const latestCap = phase.captures[phase.captures.length - 1]
+            return (
+              <div key={phase.phaseId} className="space-y-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-sm font-semibold">{phase.phaseName}</p>
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0">{phase.areaKm2.toFixed(2)} km²</Badge>
+                  <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0", healthBadgeColor(phase.health))}>{phase.health}</Badge>
+                  <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0", trendBadgeColor(phase.trend))}>{phase.trend}</Badge>
+                </div>
+
+                <TwoTrackBar constructionPct={phase.constructionPct} timelinePct={phase.timelinePct} gap={phase.progressGap} compact />
+
+                {/* Category bars */}
+                {latestCap && (
+                  <div className="space-y-2">
+                    {CAT_LABELS.map(({ key, label }) => {
+                      const val = latestCap.categories[key]
+                      return (
+                        <div key={key} className="space-y-0.5">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="font-medium text-muted-foreground">{label}</span>
+                            <span className="font-semibold tabular-nums">{val}%</span>
+                          </div>
+                          <div className="relative h-1.5 rounded-full bg-muted overflow-hidden">
+                            <div className={cn("absolute h-full rounded-full", val >= 80 ? "bg-green-500" : val >= 50 ? "bg-blue-500" : val >= 20 ? "bg-amber-500" : "bg-red-400")} style={{ width: `${val}%` }} />
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {/* Quarterly dots timeline — each dot clickable */}
+                {phase.captures.length > 1 && (
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {phase.captures.map((cap, ci) => (
+                      <React.Fragment key={cap.quarter}>
+                        <button
+                          onClick={() => onViewImage(cap.imageId, cap, phase)}
+                          className="flex flex-col items-center group/dot hover:opacity-80 transition-opacity"
+                          title={`View ${cap.quarter} capture (${cap.imageId})`}
+                        >
+                          <div className={cn("w-3 h-3 rounded-full ring-2 ring-transparent group-hover/dot:ring-primary/40 transition-all",
+                            ci === phase.captures.length - 1 ? "bg-primary" : "bg-muted-foreground/40")} />
+                          <span className="text-[8px] text-muted-foreground mt-0.5 whitespace-nowrap">{cap.quarter}</span>
+                          <span className="text-[9px] font-semibold tabular-nums">{cap.constructionPct}%</span>
+                        </button>
+                        {ci < phase.captures.length - 1 && (
+                          <div className="flex flex-col items-center px-1">
+                            <div className="w-6 h-px bg-border" />
+                            {phase.captures[ci + 1].delta && (
+                              <span className="text-[8px] text-green-600 font-medium whitespace-nowrap">+{phase.captures[ci + 1].delta!.delta}</span>
+                            )}
+                          </div>
+                        )}
+                      </React.Fragment>
+                    ))}
+                  </div>
+                )}
+
+                <p className="text-xs text-muted-foreground leading-relaxed">{phase.narrative}</p>
+
+                {/* Captures table — click any row to drill into that image */}
+                <div className="rounded-lg border border-border overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="text-left px-3 py-2 font-medium text-muted-foreground">Quarter</th>
+                        <th className="text-left px-3 py-2 font-medium text-muted-foreground">Image</th>
+                        <th className="text-right px-3 py-2 font-medium text-muted-foreground">Progress</th>
+                        <th className="text-right px-3 py-2 font-medium text-muted-foreground">Δ pts</th>
+                        <th className="text-left px-3 py-2 font-medium text-muted-foreground">Pace</th>
+                        <th className="text-left px-3 py-2 font-medium text-muted-foreground hidden sm:table-cell">Driver</th>
+                        <th className="px-2 py-2 w-8" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {phase.captures.map((cap) => {
+                        const isReal = !cap.imageId.startsWith("SAT-SIM")
+                        return (
+                          <tr key={cap.quarter}
+                            className="border-t border-border hover:bg-muted/30 cursor-pointer transition-colors group/row"
+                            onClick={() => onViewImage(cap.imageId, cap, phase)}
+                          >
+                            <td className="px-3 py-2 font-medium text-foreground">{cap.quarter}</td>
+                            <td className="px-3 py-2">
+                              <span className={cn("font-mono", isReal ? "text-primary" : "text-muted-foreground")}>
+                                {cap.imageId}
+                              </span>
+                              {!isReal && <span className="ml-1 text-[9px] text-muted-foreground/60">sim</span>}
+                            </td>
+                            <td className="px-3 py-2 text-right font-semibold tabular-nums">{cap.constructionPct}%</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-green-600 font-medium">
+                              {cap.delta ? `+${cap.delta.delta}` : "—"}
+                            </td>
+                            <td className="px-3 py-2">
+                              {cap.delta ? (
+                                <Badge variant="outline" className={cn("text-[9px] px-1 py-0", paceColor(cap.delta.pace as PaceLabel))}>
+                                  {cap.delta.pace}
+                                </Badge>
+                              ) : <span className="text-muted-foreground">First</span>}
+                            </td>
+                            <td className="px-3 py-2 text-muted-foreground hidden sm:table-cell">
+                              {cap.delta?.primaryDriver || "—"}
+                            </td>
+                            <td className="px-2 py-2">
+                              <Eye className="h-3.5 w-3.5 text-muted-foreground group-hover/row:text-foreground transition-colors" />
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                <Separator />
+              </div>
+            )
+          })}
+        </div>
+      </SheetContent>
+    </Sheet>
+  )
+}
+
 // ─── Construction Analysis Tab ────────────────────────────────────────────────
 
 function ConstructionAnalysisTab() {
@@ -3531,69 +4322,59 @@ function ConstructionAnalysisTab() {
   const [search, setSearch]               = useState("")
   const [districtFilter, setDistrict]     = useState<Set<string>>(new Set())
   const [areaFilter, setArea]             = useState<Set<string>>(new Set())
-  const [projectFilter, setProject]       = useState<Set<string>>(new Set())
-  const [dateFrom, setDateFrom]           = useState("")
-  const [dateTo, setDateTo]               = useState("")
+  const [healthFilter, setHealth]         = useState<Set<string>>(new Set())
   // ── UI state ──
-  const [expandedIds, setExpanded]        = useState<Set<string>>(new Set())
-  const [drawerGroup, setDrawerGroup]     = useState<ProjectGroup | null>(null)
-  const [detailImage, setDetailImage]     = useState<SatelliteImage | null>(null)
-  const [detailTab, setDetailTab]         = useState<"main" | "analysis">("main")
+  const [expandedIds, setExpanded]          = useState<Set<string>>(new Set())
+  const [drawerCompound, setDrawerCompound] = useState<Compound | null>(null)
+  const [drawerPhase, setDrawerPhase]       = useState<{ phase: CompoundPhase; compound: Compound } | null>(null)
+  // ── Capture drill-down state ──
+  const [detailImage, setDetailImage]       = useState<SatelliteImage | null>(null)
+  const [detailImageTab, setDetailImageTab] = useState<"main" | "analysis">("analysis")
+  const [detailCapture, setDetailCapture]   = useState<{ capture: PhaseCapture; phase: CompoundPhase; compound: Compound } | null>(null)
 
-  // ── Unique filter options ──
-  const uniqueDistricts = useMemo(() => Array.from(new Set(PROJECT_GROUPS.map(g => g.district))).sort(), [])
-  const uniqueAreas     = useMemo(() => Array.from(new Set(PROJECT_GROUPS.map(g => g.areaName))).sort(), [])
-  const uniqueProjects  = useMemo(() => PROJECT_GROUPS.map(g => ({ id: g.projectId, name: g.projectName })).sort((a,b) => a.name.localeCompare(b.name)), [])
-
-  // ── Filter groups ──
-  const filtered = useMemo(() => {
-    return PROJECT_GROUPS.filter(g => {
-      const q = search.toLowerCase()
-      if (search && !g.projectName.toLowerCase().includes(q) && !g.projectId.toLowerCase().includes(q)) return false
-      if (districtFilter.size > 0 && !districtFilter.has(g.district)) return false
-      if (areaFilter.size > 0 && !areaFilter.has(g.areaName)) return false
-      if (projectFilter.size > 0 && !projectFilter.has(g.projectId)) return false
-      if (dateFrom || dateTo) {
-        const inRange = g.images.some(img => {
-          const d = img.capturedAt.split(" ")[0]
-          if (dateFrom && d < dateFrom) return false
-          if (dateTo   && d > dateTo)   return false
-          return true
-        })
-        if (!inRange) return false
-      }
-      return true
-    })
-  }, [search, districtFilter, areaFilter, projectFilter, dateFrom, dateTo])
-
-  const hasFilter = !!(search || districtFilter.size || areaFilter.size || projectFilter.size || dateFrom || dateTo)
-  const clearFilters = () => {
-    setSearch(""); setDistrict(new Set()); setArea(new Set()); setProject(new Set())
-    setDateFrom(""); setDateTo("")
+  const handleViewImage = (imageId: string, capture: PhaseCapture, phase: CompoundPhase, compoundCtx?: Compound) => {
+    const realImg = SATELLITE_IMAGES.find(img => img.id === imageId)
+    if (realImg) {
+      setDetailImage(realImg)
+      setDetailImageTab("analysis")
+    } else {
+      // resolve compound from argument, then open drawers, then give up gracefully
+      const c = compoundCtx ?? drawerCompound ?? drawerPhase?.compound ?? null
+      if (c) setDetailCapture({ capture, phase, compound: c })
+    }
   }
 
-  // ── Analytics (same 6 cards as Images tab) ──
-  const filteredImages      = useMemo(() => filtered.flatMap(g => g.images), [filtered])
-  const totalAreaCaptured   = useMemo(() => filteredImages.reduce((s, r) => s + r.areaCapturedKm2, 0), [filteredImages])
-  const totalProjectArea    = useMemo(() => filteredImages.reduce((s, r) => s + r.totalAreaKm2, 0), [filteredImages])
-  const totalCostUsd        = useMemo(() => filteredImages.reduce((s, r) => s + r.costUsd, 0), [filteredImages])
-  const { costLastMonth: caLastMonth, costLastQuarter: caLastQuarter } = useMemo(() => {
-    const allDates = SATELLITE_IMAGES.map(r => new Date(r.requestedAt.split(" ")[0]).getTime())
-    const maxDate   = new Date(Math.max(...allDates))
-    const monthAgo  = new Date(maxDate); monthAgo.setDate(monthAgo.getDate() - 30)
-    const quarterAgo = new Date(maxDate); quarterAgo.setDate(quarterAgo.getDate() - 90)
-    return {
-      costLastMonth:   filteredImages.filter(r => new Date(r.requestedAt.split(" ")[0]) >= monthAgo).reduce((s,r) => s+r.costUsd, 0),
-      costLastQuarter: filteredImages.filter(r => new Date(r.requestedAt.split(" ")[0]) >= quarterAgo).reduce((s,r) => s+r.costUsd, 0),
-    }
-  }, [filteredImages])
-  const avgProgress = useMemo(() => {
-    const withAnalysis = filtered.filter(g => g.latestAnalysis)
-    if (!withAnalysis.length) return 0
-    return Math.round(withAnalysis.reduce((s, g) => s + (g.latestAnalysis!.overallPct), 0) / withAnalysis.length)
-  }, [filtered])
+  // ── Unique filter options ──
+  const uniqueDistricts = useMemo(() => Array.from(new Set(COMPOUNDS.map(c => c.district))).sort(), [])
+  const uniqueAreas     = useMemo(() => Array.from(new Set(COMPOUNDS.map(c => c.areaName))).sort(), [])
+  const uniqueHealths   = useMemo(() => Array.from(new Set(COMPOUNDS.map(c => c.health))).sort(), [])
 
-  const fmtUsd = (n: number) => n === 0 ? "$0.00" : `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  // ── Filtered compounds ──
+  const filtered = useMemo(() => {
+    return COMPOUNDS.filter(c => {
+      const q = search.toLowerCase()
+      if (search && !c.projectName.toLowerCase().includes(q) && !c.projectId.toLowerCase().includes(q)) return false
+      if (districtFilter.size > 0 && !districtFilter.has(c.district)) return false
+      if (areaFilter.size > 0 && !areaFilter.has(c.areaName)) return false
+      if (healthFilter.size > 0 && !healthFilter.has(c.health)) return false
+      return true
+    })
+  }, [search, districtFilter, areaFilter, healthFilter])
+
+  const hasFilter = !!(search || districtFilter.size || areaFilter.size || healthFilter.size)
+  const clearFilters = () => {
+    setSearch(""); setDistrict(new Set()); setArea(new Set()); setHealth(new Set())
+  }
+
+  // ── Analytics ──
+  const totalPhases  = useMemo(() => filtered.reduce((s, c) => s + c.phases.length, 0), [filtered])
+  const avgConstPct  = useMemo(() => {
+    if (!filtered.length) return 0
+    return Math.round(filtered.reduce((s, c) => s + c.constructionPct, 0) / filtered.length)
+  }, [filtered])
+  const totalAreaKm2 = useMemo(() => filtered.reduce((s, c) => s + c.totalAreaKm2, 0), [filtered])
+  const phasesAhead  = useMemo(() => filtered.reduce((s, c) => s + c.phases.filter(p => p.health === "Ahead" || p.health === "Nearly Complete").length, 0), [filtered])
+  const phasesBehind = useMemo(() => filtered.reduce((s, c) => s + c.phases.filter(p => p.health === "Behind" || p.health === "Monitor").length, 0), [filtered])
 
   const toggleExpand = (id: string) => setExpanded(prev => {
     const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next
@@ -3603,14 +4384,13 @@ function ConstructionAnalysisTab() {
     <div className="space-y-4">
 
       {/* ── Analytics cards ── */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {[
-          { label: "Projects",             value: String(filtered.length),              sub: "with captures" },
-          { label: "Total Captures",       value: String(filteredImages.length),         sub: "satellite images" },
-          { label: "Avg Progress",         value: `${avgProgress}%`,                    sub: "overall" },
-          { label: "Total Area Captured",  value: `${totalAreaCaptured.toFixed(2)}`,    sub: "km²" },
-          { label: "Cost Last Month",      value: fmtUsd(caLastMonth),                  sub: `~EGP ${Math.round(caLastMonth*50).toLocaleString("en-US")}` },
-          { label: "Cost Last Quarter",    value: fmtUsd(caLastQuarter),                sub: `~EGP ${Math.round(caLastQuarter*50).toLocaleString("en-US")}` },
+          { label: "Projects",            value: String(filtered.length),      sub: "tracked" },
+          { label: "Phases",              value: String(totalPhases),          sub: "across all projects" },
+          { label: "Avg Construction",    value: `${avgConstPct}%`,            sub: "area-weighted" },
+          { label: "Ahead / On Track",    value: String(phasesAhead),          sub: "phases" },
+          { label: "Behind / Monitor",    value: String(phasesBehind),         sub: "phases" },
         ].map(({ label, value, sub }) => (
           <div key={label} className="rounded-lg border border-border bg-card px-4 py-3">
             <p className="text-xs text-muted-foreground mb-1">{label}</p>
@@ -3625,7 +4405,7 @@ function ConstructionAnalysisTab() {
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative shrink-0 w-64">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-            <Input className="h-8 pl-8 pr-7 w-full text-sm" placeholder="Search project name or ID…"
+            <Input className="h-8 pl-8 pr-7 w-full text-sm" placeholder="Search compound name or ID…"
               value={search} onChange={e => setSearch(e.target.value)} />
             {search && (
               <button className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" onClick={() => setSearch("")}>
@@ -3637,10 +4417,8 @@ function ConstructionAnalysisTab() {
             onChange={s => setDistrict(s)} className="w-32" />
           <MultiSelectFilter label="Area" options={uniqueAreas} selected={areaFilter}
             onChange={s => setArea(s)} className="w-28" />
-          <MultiSelectFilter label="Project" options={uniqueProjects.map(p => p.id)}
-            selected={projectFilter} onChange={s => setProject(s)} className="w-28" />
-          <DateRangeFilter label="Capture Date" dateFrom={dateFrom} dateTo={dateTo}
-            onChangeFrom={setDateFrom} onChangeTo={setDateTo} className="w-44" />
+          <MultiSelectFilter label="Health" options={uniqueHealths} selected={healthFilter}
+            onChange={s => setHealth(s)} className="w-28" />
           {hasFilter && (
             <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground" onClick={clearFilters}>
               <X className="h-3.5 w-3.5 mr-1" />Clear All
@@ -3649,145 +4427,224 @@ function ConstructionAnalysisTab() {
         </div>
       </div>
 
-      {/* ── Project card list ── */}
+      {/* ── Compound card list ── */}
       <div className="space-y-2">
         {filtered.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-sm text-muted-foreground gap-2">
             <ScanSearch className="h-8 w-8 opacity-30" />
-            No projects match the current filters.
+            No compounds match the current filters.
           </div>
         )}
 
-        {filtered.map(group => {
-          const isExpanded = expandedIds.has(group.projectId)
-          const a = group.latestAnalysis
-          const latest = group.images[group.images.length - 1]
+        {filtered.map(compound => {
+          const isExpanded = expandedIds.has(compound.projectId)
+          const monthsLeft = monthsUntil(compound.maxDelivery)
 
           return (
-            <div key={group.projectId} className="rounded-xl border border-border bg-card overflow-hidden">
+            <div key={compound.projectId} className="rounded-xl border border-border bg-card overflow-hidden">
               {/* Card header */}
               <div
                 className="flex flex-col gap-2 px-4 py-3.5 cursor-pointer hover:bg-muted/20 transition-colors"
-                onClick={() => toggleExpand(group.projectId)}
+                onClick={() => toggleExpand(compound.projectId)}
               >
-              <div className="flex items-center gap-4">
-                {/* Expand chevron */}
-                <ChevronRight className={cn("h-4 w-4 text-muted-foreground flex-shrink-0 transition-transform", isExpanded && "rotate-90")} />
+                <div className="flex items-center gap-4">
+                  {/* Expand chevron */}
+                  <ChevronRight className={cn("h-4 w-4 text-muted-foreground flex-shrink-0 transition-transform", isExpanded && "rotate-90")} />
 
-                {/* Project info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                    <span className="text-sm font-semibold text-foreground">{group.projectName}</span>
-                    <span className="font-mono text-[10px] text-muted-foreground">{group.projectId}</span>
-                    <AreaTag areaName={group.areaName} />
+                  {/* Compound info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                      <span className="text-sm font-semibold text-foreground">{compound.projectName}</span>
+                      <CopyId value={compound.projectId} />
+                      <AreaTag areaName={compound.areaName} />
+                      <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0", healthBadgeColor(compound.health))}>{compound.health}</Badge>
+                    </div>
+                    <div className="flex items-center gap-3 text-[11px] text-muted-foreground flex-wrap">
+                      <span>{compound.developer.name}</span>
+                      <span>·</span>
+                      <span>{compound.phases.length > 0 ? `${compound.phases.length} phase${compound.phases.length > 1 ? "s" : ""}` : "No phases"}</span>
+                      <span>·</span>
+                      <span>{compound.totalAreaKm2.toFixed(2)} km²</span>
+                      <span>·</span>
+                      <span className={cn("tabular-nums font-medium", compound.progressGap >= 0 ? "text-green-600" : "text-amber-600")}>
+                        {compound.progressGap >= 0 ? "+" : ""}{compound.progressGap} pts gap
+                      </span>
+                      <span>·</span>
+                      <span className="tabular-nums">
+                        {monthsLeft > 0 ? `${monthsLeft}mo to delivery` : `${Math.abs(monthsLeft)}mo past`}
+                      </span>
+                      {(() => {
+                        const allCaptures = compound.phases.flatMap(p => p.captures)
+                        const latest = allCaptures.reduce((best, c) => c.date > best ? c.date : best, "")
+                        return latest ? <><span>·</span><span>Updated {toQuarter(latest)}</span></> : null
+                      })()}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
-                    <span>{group.developer.name}</span>
-                    <span>·</span>
-                    <span>{group.phaseName}</span>
-                    <span>·</span>
-                    <span>Latest: {formatDateTime(latest.capturedAt)}</span>
-                    <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                      {group.images.length} capture{group.images.length > 1 ? "s" : ""}
-                    </Badge>
-                  </div>
-                </div>
 
-                {/* Progress */}
-                {a && (
+                  {/* Progress summary */}
                   <div className="flex items-center gap-3 flex-shrink-0">
                     <div className="text-right min-w-[60px]">
-                      <div className="text-xl font-bold tabular-nums">{a.overallPct}%</div>
-                      {a.delta && (
-                        <div className="text-[10px] text-green-600 font-medium">+{a.overallPct - a.delta.overallFrom} pts</div>
-                      )}
+                      <div className="text-xl font-bold tabular-nums">{compound.constructionPct}%</div>
+                      <div className="text-[10px] text-muted-foreground">{compound.timelinePct}% timeline</div>
                     </div>
-                    <div className="w-24 space-y-1">
-                      <div className="relative h-1.5 rounded-full bg-muted overflow-hidden">
-                        {a.delta && <div className="absolute h-full rounded-full bg-muted-foreground/20" style={{ width:`${a.delta.overallFrom}%` }} />}
-                        <div className={cn("absolute h-full rounded-full", progressColor(a.overallPct))}
-                          style={{ width:`${a.overallPct}%` }} />
-                      </div>
-                      {a.delta && (
-                        <Badge variant="outline" className={cn("text-[9px] px-1 py-0", paceColor(a.delta.pace))}>{a.delta.pace}</Badge>
-                      )}
+                    <div className="w-28">
+                      <TwoTrackBar constructionPct={compound.constructionPct} timelinePct={compound.timelinePct} gap={compound.progressGap} compact />
                     </div>
                   </div>
-                )}
 
-                {/* View button */}
-                <button
-                  onClick={e => { e.stopPropagation(); setDrawerGroup(group) }}
-                  className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors flex-shrink-0"
-                  title="View Full Analysis"
-                >
-                  <Eye className="h-4 w-4" />
-                </button>
-              </div>
-
-              {/* Timeline bar */}
-              {PROJECT_METADATA[group.projectId] && a && (
-                <div onClick={e => e.stopPropagation()}>
-                  <ProjectTimelineBar
-                    meta={PROJECT_METADATA[group.projectId]}
-                    captureDate={latest.capturedAt}
-                    overallPct={a.overallPct}
-                    compact
-                  />
+                  {/* View button */}
+                  <button
+                    onClick={e => { e.stopPropagation(); setDrawerCompound(compound) }}
+                    className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors flex-shrink-0"
+                    title="View Full Analysis"
+                  >
+                    <Eye className="h-4 w-4" />
+                  </button>
                 </div>
-              )}
               </div>
 
-              {/* Expanded: images mini-table */}
+              {/* Expanded content */}
               {isExpanded && (
-                <div className="border-t border-border">
-                  <table className="w-full text-xs border-collapse">
-                    <thead>
-                      <tr className="bg-muted/50">
-                        <th className="text-left px-4 py-2 font-medium text-muted-foreground border-r border-border">Image</th>
-                        <th className="text-left px-3 py-2 font-medium text-muted-foreground border-r border-border">Quality</th>
-                        <th className="text-left px-3 py-2 font-medium text-muted-foreground border-r border-border">Captured</th>
-                        <th className="text-left px-3 py-2 font-medium text-muted-foreground border-r border-border">System</th>
-                        <th className="text-left px-3 py-2 font-medium text-muted-foreground border-r border-border">Type</th>
-                        <th className="text-left px-3 py-2 font-medium text-muted-foreground border-r border-border">Progress</th>
-                        <th className="px-3 py-2 w-10" />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {group.images.map(img => {
-                        const imgA = CONSTRUCTION_ANALYSIS[img.id]
-                        return (
-                          <tr key={img.id} className="border-t border-border hover:bg-muted/30 cursor-pointer transition-colors group"
-                            onClick={() => { setDetailImage(img); setDetailTab("main") }}>
-                            <td className="px-4 py-2.5 border-r border-border">
-                              <div className="flex items-center gap-2">
-                                <SatThumbnail image={img} size="sm" />
-                                <span className="font-mono text-muted-foreground">{img.id}</span>
-                              </div>
-                            </td>
-                            <td className="px-3 py-2.5 border-r border-border"><QualityBadge quality={img.quality} /></td>
-                            <td className="px-3 py-2.5 border-r border-border text-muted-foreground whitespace-nowrap">{formatDateTime(img.capturedAt)}</td>
-                            <td className="px-3 py-2.5 border-r border-border"><SystemBadge system={img.systemRequested} /></td>
-                            <td className="px-3 py-2.5 border-r border-border"><TypeBadge type={img.type} /></td>
-                            <td className="px-3 py-2.5 border-r border-border">
-                              {imgA ? (
-                                <div className="flex items-center gap-2">
-                                  <span className="font-semibold tabular-nums">{imgA.overallPct}%</span>
-                                  <div className="w-16 h-1.5 rounded-full bg-muted overflow-hidden">
-                                    <div className={cn("h-full rounded-full", progressColor(imgA.overallPct))}
-                                      style={{ width:`${imgA.overallPct}%` }} />
+                <div className="border-t border-border px-4 py-3 space-y-3 bg-muted/10">
+
+                  {/* ── No-phases case: direct project-level analysis ── */}
+                  {compound.phases.length === 0 && (() => {
+                    const allImgs = SATELLITE_IMAGES.filter(img => img.projectId === compound.projectId)
+                    const latestImg = allImgs.sort((a, b) => b.capturedAt.localeCompare(a.capturedAt))[0]
+                    const latestAnalysis = latestImg ? CONSTRUCTION_ANALYSIS[latestImg.id] : null
+                    return (
+                      <div className="space-y-3">
+                        {/* Dates row */}
+                        <div className="flex items-center gap-4 text-[11px] text-muted-foreground flex-wrap">
+                          <span>Launch: <span className="font-medium text-foreground">{toQuarter(compound.earliestLaunch)}</span></span>
+                          <span>Min Delivery: <span className="font-medium text-foreground">{toQuarter(compound.minDelivery)}</span></span>
+                          <span>Max Delivery: <span className="font-medium text-foreground">{toQuarter(compound.maxDelivery)}</span></span>
+                        </div>
+                        <TwoTrackBar constructionPct={compound.constructionPct} timelinePct={compound.timelinePct} gap={compound.progressGap} />
+                        {/* Category breakdown from latest image analysis */}
+                        {latestAnalysis && (
+                          <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                            {CAT_LABELS.map(({ key, label }) => {
+                              const val = latestAnalysis.categories[key].pct
+                              return (
+                                <div key={key} className="space-y-0.5">
+                                  <div className="flex items-center justify-between text-[10px]">
+                                    <span className="text-muted-foreground">{label}</span>
+                                    <span className="font-semibold tabular-nums">{val}%</span>
+                                  </div>
+                                  <div className="relative h-1.5 rounded-full bg-muted overflow-hidden">
+                                    <div className={cn("absolute h-full rounded-full", val >= 80 ? "bg-green-500" : val >= 50 ? "bg-blue-500" : val >= 20 ? "bg-amber-500" : "bg-red-400")} style={{ width: `${val}%` }} />
                                   </div>
                                 </div>
-                              ) : <span className="text-muted-foreground">—</span>}
-                            </td>
-                            <td className="px-3 py-2.5">
-                              <Eye className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
+                              )
+                            })}
+                          </div>
+                        )}
+                        <p className="text-[11px] text-muted-foreground leading-relaxed">{compound.projectNarrative}</p>
+                        {/* Quarterly dots — each dot opens image detail on Construction Analysis tab */}
+                        {allImgs.length > 0 && (
+                          <div className="flex items-center gap-1 flex-wrap py-1">
+                            {[...allImgs].sort((a, b) => a.capturedAt.localeCompare(b.capturedAt)).map((img, ci, arr) => (
+                              <React.Fragment key={img.id}>
+                                <button
+                                  onClick={() => { setDetailImage(img); setDetailImageTab("analysis") }}
+                                  className="flex flex-col items-center group/dot hover:opacity-80 transition-opacity"
+                                  title={`View ${toQuarter(img.capturedAt)} capture (${img.id})`}
+                                >
+                                  <div className={cn("w-3 h-3 rounded-full ring-2 ring-transparent group-hover/dot:ring-primary/40 transition-all",
+                                    ci === arr.length - 1 ? "bg-primary" : "bg-muted-foreground/40")} />
+                                  <span className="text-[8px] text-muted-foreground mt-0.5 whitespace-nowrap">{toQuarter(img.capturedAt)}</span>
+                                  <span className="text-[9px] font-semibold tabular-nums">
+                                    {CONSTRUCTION_ANALYSIS[img.id]?.overallPct ?? "—"}%
+                                  </span>
+                                </button>
+                                {ci < arr.length - 1 && <div className="w-6 h-px bg-border mx-1 mt-1" />}
+                              </React.Fragment>
+                            ))}
+                          </div>
+                        )}
+                        {allImgs.length === 0 && (
+                          <p className="text-[11px] text-muted-foreground italic">No satellite images in dataset for this project.</p>
+                        )}
+                      </div>
+                    )
+                  })()}
+
+                  {/* ── Phases case: phase sub-cards ── */}
+                  {compound.phases.map(phase => {
+                    const latestCap = phase.captures[phase.captures.length - 1]
+                    const lastUpdatedQ = latestCap ? toQuarter(latestCap.date) : null
+                    return (
+                      <div key={phase.phaseId} className="rounded-lg border border-border bg-card p-3 space-y-2.5">
+                        {/* Phase header with View button */}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-semibold">{phase.phaseName}</span>
+                            <Badge variant="outline" className="text-[9px] px-1 py-0">{phase.areaKm2.toFixed(2)} km²</Badge>
+                            <Badge variant="outline" className={cn("text-[9px] px-1 py-0", healthBadgeColor(phase.health))}>{phase.health}</Badge>
+                            <Badge variant="outline" className={cn("text-[9px] px-1 py-0", trendBadgeColor(phase.trend))}>{phase.trend}</Badge>
+                            {lastUpdatedQ && <span className="text-[9px] text-muted-foreground">Updated {lastUpdatedQ}</span>}
+                          </div>
+                          <button
+                            onClick={e => { e.stopPropagation(); setDrawerPhase({ phase, compound }) }}
+                            className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors flex-shrink-0"
+                            title="View Phase Analysis"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+
+                        {/* Two-track bar */}
+                        <TwoTrackBar constructionPct={phase.constructionPct} timelinePct={phase.timelinePct} gap={phase.progressGap} compact />
+
+                        {/* Quarterly capture dots */}
+                        {phase.captures.length > 1 && (
+                          <div className="flex items-center gap-1 flex-wrap py-1">
+                            {phase.captures.map((cap, ci) => (
+                              <React.Fragment key={cap.quarter}>
+                                <div className="flex flex-col items-center">
+                                  <div className={cn("w-2 h-2 rounded-full", ci === phase.captures.length - 1 ? "bg-primary" : "bg-muted-foreground/40")} />
+                                  <span className="text-[7px] text-muted-foreground mt-0.5 whitespace-nowrap">{cap.quarter}</span>
+                                  <span className="text-[8px] font-semibold tabular-nums">{cap.constructionPct}%</span>
+                                </div>
+                                {ci < phase.captures.length - 1 && (
+                                  <div className="flex flex-col items-center px-0.5">
+                                    <div className="w-4 h-px bg-border" />
+                                    {phase.captures[ci + 1].delta && (
+                                      <span className="text-[7px] text-green-600 font-medium whitespace-nowrap">+{phase.captures[ci + 1].delta!.delta}</span>
+                                    )}
+                                  </div>
+                                )}
+                              </React.Fragment>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Category progress bars */}
+                        {latestCap && (
+                          <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                            {CAT_LABELS.map(({ key, label }) => {
+                              const val = latestCap.categories[key]
+                              return (
+                                <div key={key} className="space-y-0.5">
+                                  <div className="flex items-center justify-between text-[10px]">
+                                    <span className="text-muted-foreground">{label}</span>
+                                    <span className="font-semibold tabular-nums">{val}%</span>
+                                  </div>
+                                  <div className="relative h-1 rounded-full bg-muted overflow-hidden">
+                                    <div className={cn("absolute h-full rounded-full", val >= 80 ? "bg-green-500" : val >= 50 ? "bg-blue-500" : val >= 20 ? "bg-amber-500" : "bg-red-400")} style={{ width: `${val}%` }} />
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+
+                        {/* Narrative */}
+                        <p className="text-[11px] text-muted-foreground leading-relaxed">{phase.narrative}</p>
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </div>
@@ -3795,20 +4652,175 @@ function ConstructionAnalysisTab() {
         })}
       </div>
 
-      {/* ── Project Story Drawer ── */}
-      <ConstructionProjectDrawer
-        group={drawerGroup}
-        open={!!drawerGroup}
-        onClose={() => setDrawerGroup(null)}
-        onViewImage={(img) => { setDetailImage(img); setDetailTab("main") }}
+      {/* ── Compound Drawer ── */}
+      <CompoundDrawer
+        compound={drawerCompound}
+        open={!!drawerCompound}
+        onClose={() => setDrawerCompound(null)}
+        onViewImage={handleViewImage}
       />
 
-      {/* ── Image Detail Sheet (re-using same content as Images tab) ── */}
+      {/* ── Phase Analysis Drawer ── */}
+      <Sheet open={!!drawerPhase} onOpenChange={(o) => !o && setDrawerPhase(null)}>
+        <SheetContent className="w-[640px] sm:max-w-[640px] flex flex-col p-0">
+          {drawerPhase && (() => {
+            const { phase, compound } = drawerPhase
+            const latestCap = phase.captures[phase.captures.length - 1]
+            const lastUpdatedQ = latestCap ? toQuarter(latestCap.date) : null
+            return (
+              <>
+                <SheetHeader className="px-6 py-4 border-b border-border shrink-0 space-y-1.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <CopyId value={phase.phaseId} className="font-semibold text-foreground text-xs" />
+                    <AreaTag areaName={compound.areaName} />
+                    <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0", healthBadgeColor(phase.health))}>{phase.health}</Badge>
+                    <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0", trendBadgeColor(phase.trend))}>{phase.trend}</Badge>
+                  </div>
+                  <SheetTitle className="text-base font-semibold">{compound.projectName} — {phase.phaseName}</SheetTitle>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                    <span>{compound.developer.name}</span>
+                    <span>·</span>
+                    <span>{phase.areaKm2.toFixed(2)} km²</span>
+                    <span>·</span>
+                    <span>{phase.captures.length} capture{phase.captures.length !== 1 ? "s" : ""}</span>
+                    {lastUpdatedQ && <><span>·</span><span>Updated {lastUpdatedQ}</span></>}
+                  </div>
+                  {/* Phase-level timeline */}
+                  <div className="pt-1 space-y-1">
+                    <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
+                      <span>Launch: <span className="font-medium text-foreground">{toQuarter(phase.launchDate)}</span></span>
+                      <span>Min Del: <span className="font-medium text-foreground">{toQuarter(phase.minDeliveryDate)}</span></span>
+                      <span>Max Del: <span className="font-medium text-foreground">{toQuarter(phase.maxDeliveryDate)}</span></span>
+                    </div>
+                    <TwoTrackBar constructionPct={phase.constructionPct} timelinePct={phase.timelinePct} gap={phase.progressGap} />
+                  </div>
+                </SheetHeader>
+
+                <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+
+                  {/* Category breakdown */}
+                  {latestCap && (
+                    <div className="space-y-3">
+                      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Category Breakdown — {latestCap.quarter}</p>
+                      <div className="space-y-2.5">
+                        {CAT_LABELS.map(({ key, label }) => {
+                          const val = latestCap.categories[key]
+                          return (
+                            <div key={key} className="space-y-1">
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="font-medium">{label}</span>
+                                <span className="font-semibold tabular-nums">{val}% <span className="text-muted-foreground font-normal text-[10px]">{catLabel(val)}</span></span>
+                              </div>
+                              <div className="relative h-2 rounded-full bg-muted overflow-hidden">
+                                <div className={cn("absolute h-full rounded-full", val >= 80 ? "bg-green-500" : val >= 50 ? "bg-blue-500" : val >= 20 ? "bg-amber-500" : "bg-red-400")} style={{ width: `${val}%` }} />
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  <Separator />
+
+                  {/* Narrative */}
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Phase Analysis</p>
+                    <p className="text-sm text-foreground leading-relaxed">{phase.narrative}</p>
+                  </div>
+
+                  <Separator />
+
+                  {/* Quarterly dot timeline */}
+                  {phase.captures.length > 1 && (
+                    <div className="space-y-3">
+                      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Quarterly Timeline</p>
+                      <div className="flex items-end gap-2 flex-wrap">
+                        {phase.captures.map((cap, ci) => (
+                          <React.Fragment key={cap.quarter}>
+                            <button
+                              onClick={() => handleViewImage(cap.imageId, cap, phase, compound)}
+                              className="flex flex-col items-center group/dot hover:opacity-80 transition-opacity"
+                              title={`${cap.quarter} — ${cap.imageId}`}
+                            >
+                              <div className={cn("w-3 h-3 rounded-full ring-2 ring-transparent group-hover/dot:ring-primary/40 transition-all", ci === phase.captures.length - 1 ? "bg-primary" : "bg-muted-foreground/40")} />
+                              <span className="text-[9px] text-muted-foreground mt-0.5">{cap.quarter}</span>
+                              <span className="text-[10px] font-semibold tabular-nums">{cap.constructionPct}%</span>
+                            </button>
+                            {ci < phase.captures.length - 1 && (
+                              <div className="flex flex-col items-center pb-5">
+                                <div className="w-8 h-px bg-border" />
+                                {phase.captures[ci + 1].delta && (
+                                  <span className="text-[9px] text-green-600 font-medium">+{phase.captures[ci + 1].delta!.delta}</span>
+                                )}
+                              </div>
+                            )}
+                          </React.Fragment>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <Separator />
+
+                  {/* Captures table */}
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Images Taken for This Phase</p>
+                    <div className="rounded-lg border border-border overflow-hidden">
+                      <table className="w-full text-xs">
+                        <thead className="bg-muted/50">
+                          <tr>
+                            <th className="text-left px-3 py-2 font-medium text-muted-foreground">Quarter</th>
+                            <th className="text-left px-3 py-2 font-medium text-muted-foreground">Image</th>
+                            <th className="text-right px-3 py-2 font-medium text-muted-foreground">Progress</th>
+                            <th className="text-right px-3 py-2 font-medium text-muted-foreground">Δ</th>
+                            <th className="text-left px-3 py-2 font-medium text-muted-foreground">Pace</th>
+                            <th className="text-left px-3 py-2 font-medium text-muted-foreground hidden sm:table-cell">Driver</th>
+                            <th className="px-2 py-2 w-8" />
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {phase.captures.map(cap => {
+                            const isReal = !cap.imageId.startsWith("SAT-SIM")
+                            return (
+                              <tr key={cap.quarter}
+                                className="border-t border-border hover:bg-muted/30 cursor-pointer group/row transition-colors"
+                                onClick={() => handleViewImage(cap.imageId, cap, phase, compound)}>
+                                <td className="px-3 py-2 font-medium">{cap.quarter}</td>
+                                <td className="px-3 py-2">
+                                  <span className={cn("font-mono", isReal ? "text-primary" : "text-muted-foreground")}>{cap.imageId}</span>
+                                  {!isReal && <span className="ml-1 text-[9px] text-muted-foreground/60">sim</span>}
+                                </td>
+                                <td className="px-3 py-2 text-right font-semibold tabular-nums">{cap.constructionPct}%</td>
+                                <td className="px-3 py-2 text-right text-green-600 font-medium">{cap.delta ? `+${cap.delta.delta}` : "—"}</td>
+                                <td className="px-3 py-2">
+                                  {cap.delta
+                                    ? <Badge variant="outline" className={cn("text-[9px] px-1 py-0", paceColor(cap.delta.pace as PaceLabel))}>{cap.delta.pace}</Badge>
+                                    : <span className="text-muted-foreground">First</span>}
+                                </td>
+                                <td className="px-3 py-2 text-muted-foreground hidden sm:table-cell">{cap.delta?.primaryDriver || "—"}</td>
+                                <td className="px-2 py-2"><Eye className="h-3.5 w-3.5 text-muted-foreground group-hover/row:text-foreground transition-colors" /></td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                </div>
+              </>
+            )
+          })()}
+        </SheetContent>
+      </Sheet>
+
+      {/* ── Real image detail sheet (reuses same sheet as ImagesTab) ── */}
       <Sheet open={!!detailImage} onOpenChange={(o) => !o && setDetailImage(null)}>
         <SheetContent className="w-[620px] sm:max-w-[620px] flex flex-col p-0">
           {detailImage && (() => {
             const selected = detailImage
-            const area = convertArea(selected.totalAreaKm2)
+            const isPendingImg = selected.capturingStatus === "Requested" || selected.capturingStatus === "Queued"
             return (
               <>
                 <SheetHeader className="px-6 py-4 border-b border-border shrink-0 space-y-2">
@@ -3816,38 +4828,37 @@ function ConstructionAnalysisTab() {
                     <CopyId value={selected.id} className="font-semibold text-foreground text-xs" />
                     <QualityBadge quality={selected.quality} />
                     <TypeBadge type={selected.type} />
+                    <CapturingStatusBadge status={selected.capturingStatus} />
+                    <Badge variant="outline" className="text-[11px] font-medium bg-muted/50 text-muted-foreground border-border">
+                      {toQuarter(selected.capturedAt)}
+                    </Badge>
                   </div>
                   <div className="flex items-baseline gap-2 flex-wrap">
                     <SheetTitle className="text-base font-semibold">{selected.projectName} — {selected.phaseName}</SheetTitle>
                     <CopyId value={selected.projectId} />
                   </div>
-                  <div className="flex items-baseline gap-2 flex-wrap">
-                    <p className="text-sm font-medium">{selected.developer.name}</p>
-                    <CopyId value={selected.developer.id} />
-                  </div>
-                  <p className="text-xs text-muted-foreground">{selected.areaName}{selected.subAreaName ? ` — ${selected.subAreaName}` : ""}</p>
-                  {PROJECT_METADATA[selected.projectId] && (
-                    <div className="pt-1">
-                      <ProjectTimelineBar
-                        meta={PROJECT_METADATA[selected.projectId]}
-                        captureDate={selected.capturedAt}
-                        overallPct={CONSTRUCTION_ANALYSIS[selected.id]?.overallPct ?? 0}
-                      />
-                    </div>
-                  )}
+                  <p className="text-xs text-muted-foreground">{selected.developer.name} · {selected.areaName}{selected.subAreaName ? ` — ${selected.subAreaName}` : ""}</p>
                 </SheetHeader>
                 <div className="flex shrink-0 border-b border-border px-6">
                   {(["main","analysis"] as const).map(t => (
-                    <button key={t} onClick={() => setDetailTab(t)}
+                    <button key={t} onClick={() => setDetailImageTab(t)}
                       className={cn("py-2.5 px-1 mr-5 text-sm font-medium border-b-2 transition-colors",
-                        detailTab === t ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground")}>
+                        detailImageTab === t ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground")}>
                       {t === "main" ? "Main Info" : "Construction Analysis"}
                     </button>
                   ))}
                 </div>
                 <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
-                  {detailTab === "analysis" && <ConstructionAnalysisPanel image={selected} />}
-                  {detailTab === "main" && (
+                  {detailImageTab === "analysis" && (
+                    isPendingImg ? (
+                      <div className="flex flex-col items-center justify-center py-16 text-center gap-4">
+                        <Satellite className="h-8 w-8 text-muted-foreground/40" />
+                        <p className="text-sm font-semibold">No Analysis Available</p>
+                        <p className="text-xs text-muted-foreground max-w-xs">Construction analysis will be generated after capture.</p>
+                      </div>
+                    ) : <ConstructionAnalysisPanel image={selected} />
+                  )}
+                  {detailImageTab === "main" && (
                     <div className="space-y-6">
                       <ImageCard image={selected} />
                       <Separator />
@@ -3858,12 +4869,9 @@ function ConstructionAnalysisTab() {
                             { label: "Satellite",    value: <SatelliteBadge satellite={selected.satellite} /> },
                             { label: "System",       value: <SystemBadge system={selected.systemRequested} /> },
                             { label: "Quality",      value: <QualityBadge quality={selected.quality} /> },
-                            { label: "Type",         value: <TypeBadge type={selected.type} /> },
                             { label: "GSD Range",    value: getZoomHeight(selected.satellite) },
                             { label: "Requested At", value: formatDateTime(selected.requestedAt) },
-                            { label: "Captured At",  value: formatDateTime(selected.capturedAt) },
-                            { label: "Created At",   value: formatDateTime(selected.createdAt) },
-                            { label: "Updated At",   value: formatDateTime(selected.updatedAt) },
+                            { label: "Captured At",  value: isPendingImg ? "—" : formatDateTime(selected.capturedAt) },
                           ].map(({ label, value }) => (
                             <div key={label}>
                               <p className="text-[10px] text-muted-foreground mb-0.5">{label}</p>
@@ -3872,64 +4880,114 @@ function ConstructionAnalysisTab() {
                           ))}
                         </div>
                       </div>
-                      <Separator />
-                      <div>
-                        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">Imaging Cost</p>
-                        <div className="grid grid-cols-3 gap-2">
-                          <div className="rounded-lg border border-border bg-muted/30 px-3 py-2.5">
-                            <p className="text-[10px] text-muted-foreground mb-0.5">Area Captured</p>
-                            <p className="text-sm font-semibold tabular-nums">{selected.areaCapturedKm2.toFixed(3)} km²</p>
-                          </div>
-                          <div className="rounded-lg border border-border bg-muted/30 px-3 py-2.5">
-                            <p className="text-[10px] text-muted-foreground mb-0.5">Cost (USD)</p>
-                            <p className="text-sm font-semibold tabular-nums">{selected.costUsd === 0 ? "Free" : `$${selected.costUsd.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`}</p>
-                          </div>
-                          <div className="rounded-lg border border-border bg-muted/30 px-3 py-2.5">
-                            <p className="text-[10px] text-muted-foreground mb-0.5">Cost (EGP)</p>
-                            <p className="text-sm font-semibold tabular-nums">{selected.costEgp === 0 ? "Free" : `EGP ${selected.costEgp.toLocaleString("en-US",{maximumFractionDigits:0})}`}</p>
-                          </div>
-                        </div>
-                      </div>
-                      <Separator />
-                      <div>
-                        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                          <Ruler className="h-3.5 w-3.5" />Project Area
-                        </p>
-                        <div className="grid grid-cols-3 gap-2">
-                          {[
-                            { label: "Sq. Kilometres", value: `${area.km2} km²` },
-                            { label: "Sq. Metres",     value: `${area.m2} m²` },
-                            { label: "Feddans",        value: `${area.feddans} fed` },
-                            { label: "Acres",          value: `${area.acres} ac` },
-                            { label: "Hectares",       value: `${area.hectares} ha` },
-                          ].map(({ label, value }) => (
-                            <div key={label} className="rounded-lg border border-border bg-muted/30 px-3 py-2.5">
-                              <p className="text-[10px] text-muted-foreground mb-0.5">{label}</p>
-                              <p className="text-sm font-semibold tabular-nums">{value}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                      <Separator />
-                      <div>
-                        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">Developer & Project</p>
-                        <div className="grid grid-cols-4 gap-3">
-                          {[
-                            { label: "Developer", value: selected.developer.name, id: selected.developer.id },
-                            { label: "Area",      value: selected.areaName,       id: selected.areaId },
-                            { label: "Project",   value: selected.projectName,    id: selected.projectId },
-                            { label: "Phase",     value: selected.phaseName,      id: selected.phaseId },
-                          ].map(({ label, value, id }) => (
-                            <div key={label} className="min-w-0">
-                              <p className="text-[10px] text-muted-foreground mb-0.5">{label}</p>
-                              <p className="text-sm font-medium truncate">{value}</p>
-                              <CopyId value={id} />
-                            </div>
-                          ))}
-                        </div>
-                      </div>
                     </div>
                   )}
+                </div>
+              </>
+            )
+          })()}
+        </SheetContent>
+      </Sheet>
+
+      {/* ── Simulated capture detail sheet ── */}
+      <Sheet open={!!detailCapture} onOpenChange={(o) => !o && setDetailCapture(null)}>
+        <SheetContent className="w-[580px] sm:max-w-[580px] flex flex-col p-0">
+          {detailCapture && (() => {
+            const { capture, phase, compound } = detailCapture
+            const cats: { key: keyof typeof capture.categories; label: string }[] = [
+              { key: "siteInfrastructure", label: "Site & Infrastructure" },
+              { key: "structuralProgress",  label: "Structural Progress"  },
+              { key: "landscaping",         label: "Landscaping"          },
+              { key: "waterFeatures",       label: "Water Features"       },
+            ]
+            return (
+              <>
+                <SheetHeader className="px-6 py-4 border-b border-border shrink-0 space-y-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge variant="outline" className="font-mono text-[10px]">{capture.imageId}</Badge>
+                    <Badge variant="outline" className="text-[10px] bg-muted/50 text-muted-foreground">Simulated Data</Badge>
+                    {capture.delta && (
+                      <Badge variant="outline" className={cn("text-[10px]", paceColor(capture.delta.pace as PaceLabel))}>
+                        {capture.delta.pace}
+                      </Badge>
+                    )}
+                  </div>
+                  <SheetTitle className="text-base font-semibold">
+                    {compound.projectName} — {phase.phaseName}
+                  </SheetTitle>
+                  <p className="text-xs text-muted-foreground">
+                    {capture.quarter} · {compound.developer.name} · {compound.areaName}
+                  </p>
+                </SheetHeader>
+
+                <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+
+                  {/* Placeholder image */}
+                  <div className="w-full h-40 rounded-lg bg-zinc-900 flex flex-col items-center justify-center gap-2 text-center">
+                    <Satellite className="h-8 w-8 text-zinc-500" />
+                    <p className="text-xs text-zinc-400">Satellite image not in dataset</p>
+                    <p className="text-[11px] text-zinc-600 font-mono">{capture.imageId}</p>
+                  </div>
+
+                  <Separator />
+
+                  {/* Overall progress */}
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Construction Progress — {capture.quarter}</p>
+                    <div className="flex items-end gap-3">
+                      <span className="text-4xl font-bold tabular-nums">{capture.constructionPct}%</span>
+                      {capture.delta && (
+                        <span className="text-sm text-green-600 font-semibold pb-1">+{capture.delta.delta} pts vs {capture.delta.period.split("→")[0].trim()}</span>
+                      )}
+                    </div>
+                    <div className="relative h-2.5 rounded-full bg-muted overflow-hidden">
+                      <div className={cn("absolute h-full rounded-full", progressColor(capture.constructionPct))} style={{ width:`${capture.constructionPct}%` }} />
+                    </div>
+                  </div>
+
+                  {/* Category bars */}
+                  <div className="space-y-3">
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">By Category</p>
+                    {cats.map(({ key, label }) => {
+                      const val = capture.categories[key]
+                      return (
+                        <div key={key} className="space-y-1">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-medium">{label}</span>
+                            <span className="font-semibold tabular-nums">{val}% <span className="text-muted-foreground font-normal text-[10px]">{catLabel(val)}</span></span>
+                          </div>
+                          <div className="relative h-1.5 rounded-full bg-muted overflow-hidden">
+                            <div className={cn("absolute h-full rounded-full", val >= 80 ? "bg-green-500" : val >= 50 ? "bg-blue-500" : val >= 20 ? "bg-amber-500" : "bg-red-400")} style={{ width:`${val}%` }} />
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* Delta summary */}
+                  {capture.delta && (
+                    <>
+                      <Separator />
+                      <div className="space-y-3">
+                        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Delta — {capture.delta.period}</p>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-center">
+                            <p className="text-[10px] text-muted-foreground mb-0.5">Pts Gained</p>
+                            <p className="text-base font-bold text-green-600">+{capture.delta.delta}</p>
+                          </div>
+                          <div className="rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-center">
+                            <p className="text-[10px] text-muted-foreground mb-0.5">Per Quarter</p>
+                            <p className="text-base font-bold">~{Math.round(capture.delta.velocityQtly)}</p>
+                          </div>
+                          <div className="rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-center">
+                            <p className="text-[10px] text-muted-foreground mb-0.5">Primary Driver</p>
+                            <p className="text-[11px] font-semibold">{capture.delta.primaryDriver}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
                 </div>
               </>
             )

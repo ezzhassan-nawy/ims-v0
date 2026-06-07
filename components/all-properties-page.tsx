@@ -3633,6 +3633,45 @@ export function DetailedPropertiesView({ filters }: { filters: FilterProps }) {
           </DropdownMenu>
         </div>
 
+        {/* Select-all-results banner */}
+        {(() => {
+          const pageIds = paginatedRows.map((r) => r.propertyId)
+          const pageFullySelected = pageIds.length > 0 && pageIds.every((id) => selectedRows.has(id))
+          const allResultsSelected =
+            filteredRows.length > 0 && filteredRows.every((r) => selectedRows.has(r.propertyId))
+          const hasMoreThanPage = filteredRows.length > paginatedRows.length
+          if (!pageFullySelected || !hasMoreThanPage) return null
+          return (
+            <div className="flex shrink-0 items-center justify-center gap-2 border-b border-border bg-blue-50 px-4 py-2 text-xs dark:bg-blue-950/30">
+              {allResultsSelected ? (
+                <>
+                  <span className="text-blue-800 dark:text-blue-200">
+                    All <strong>{filteredRows.length.toLocaleString()}</strong> properties across all pages are selected.
+                  </span>
+                  <button
+                    onClick={() => setSelectedRows(new Set())}
+                    className="font-medium text-blue-700 underline underline-offset-2 hover:text-blue-900 dark:text-blue-300"
+                  >
+                    Clear selection
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span className="text-blue-800 dark:text-blue-200">
+                    All <strong>{paginatedRows.length}</strong> on this page are selected.
+                  </span>
+                  <button
+                    onClick={() => setSelectedRows(new Set(filteredRows.map((r) => r.propertyId)))}
+                    className="font-medium text-blue-700 underline underline-offset-2 hover:text-blue-900 dark:text-blue-300"
+                  >
+                    Select all {filteredRows.length.toLocaleString()} properties
+                  </button>
+                </>
+              )}
+            </div>
+          )
+        })()}
+
         {/* Scroll area */}
         <div className="flex-1 overflow-auto">
           <div className="min-w-max">
@@ -3865,12 +3904,21 @@ export function DetailedPropertiesView({ filters }: { filters: FilterProps }) {
             {/* Count + select all */}
             <div className="flex items-center gap-3 px-4 py-2.5">
               <span className="font-semibold tabular-nums">{selectedRows.size} selected</span>
-              <button
-                onClick={() => handleSelectAll(true)}
-                className="text-zinc-400 hover:text-white transition-colors text-xs font-medium"
-              >
-                Select all {filteredRows.length > selectedRows.size ? `(${filteredRows.length})` : ""}
-              </button>
+              {filteredRows.length > selectedRows.size ? (
+                <button
+                  onClick={() => setSelectedRows(new Set(filteredRows.map((r) => r.propertyId)))}
+                  className="text-zinc-400 hover:text-white transition-colors text-xs font-medium"
+                >
+                  Select all {filteredRows.length.toLocaleString()}
+                </button>
+              ) : (
+                <button
+                  onClick={() => setSelectedRows(new Set())}
+                  className="text-zinc-400 hover:text-white transition-colors text-xs font-medium"
+                >
+                  Clear
+                </button>
+              )}
             </div>
 
             <div className="w-px h-8 bg-zinc-700" />
