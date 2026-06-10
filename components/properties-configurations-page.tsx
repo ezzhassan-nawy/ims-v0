@@ -190,6 +190,38 @@ function formatDateTime(iso: string): string {
   return `${day} ${mon} ${year}, ${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")} ${ampm}`
 }
 
+// Estimate how editing a developer type affects the titles of its linked units.
+// Prototype heuristic (no live linkage engine): derived from the mapping diff.
+interface TitleImpact { removed: number; added: number; retitled: number }
+function computeTitleImpact(initial: DevType, form: DevTypeForm): TitleImpact {
+  const PER = 7 // dummy "units per mapping item"
+  const devChanged = initial.developer !== form.developer
+  const nameChanged = initial.nameEn !== form.nameEn || initial.nameAr !== form.nameAr
+
+  const initC = new Set(initial.compounds)
+  const formC = new Set(form.compounds)
+  const compoundsAdded = form.compounds.filter((c) => !initC.has(c)).length
+  const compoundsRemoved = initial.compounds.filter((c) => !formC.has(c)).length
+  const initP = new Set(initial.propertyTypes)
+  const formP = new Set(form.propertyTypes)
+  const ptAdded = form.propertyTypes.filter((p) => !initP.has(p)).length
+  const ptRemoved = initial.propertyTypes.filter((p) => !formP.has(p)).length
+
+  let removed = 0
+  let added = 0
+  let retitled = 0
+  if (devChanged) {
+    // Moving to another developer: the whole current set loses the title; a fresh set gains it.
+    removed = initial.totalUnits
+    added = (compoundsAdded + ptAdded + 1) * PER
+  } else {
+    removed = (compoundsRemoved + ptRemoved) * PER
+    added = (compoundsAdded + ptAdded) * PER
+    if (nameChanged) retitled = Math.max(0, initial.totalUnits - removed)
+  }
+  return { removed, added, retitled }
+}
+
 // ── Copyable ID (copy icon on hover) ───────────────────────────────────────────
 function CopyId({ id }: { id: string }) {
   const [copied, setCopied] = useState(false)
@@ -456,6 +488,7 @@ function DevTypeEditor({
   const [compounds, setCompounds] = useState<Set<string>>(new Set())
   const [propertyTypes, setPropertyTypes] = useState<Set<string>>(new Set())
   const [status, setStatus] = useState<DevTypeStatus>("Active")
+  const [confirm, setConfirm] = useState<{ form: DevTypeForm; impact: TitleImpact } | null>(null)
 
   useEffect(() => {
     if (open) {
@@ -465,10 +498,18 @@ function DevTypeEditor({
       setCompounds(new Set(initial?.compounds ?? []))
       setPropertyTypes(new Set(initial?.propertyTypes ?? []))
       setStatus(initial?.status ?? "Active")
+      setConfirm(null)
     }
   }, [open, initial])
 
   const canSave = nameEn.trim().length > 0 && nameAr.trim().length > 0 && developer.length > 0
+
+  const buildForm = (): DevTypeForm => ({ nameEn: nameEn.trim(), nameAr: nameAr.trim(), developer, compounds: [...compounds], propertyTypes: [...propertyTypes], status })
+  const handleSave = () => {
+    const form = buildForm()
+    if (initial) setConfirm({ form, impact: computeTitleImpact(initial, form) })
+    else onSave(form, null)
+  }
 
   const removeCompoundChip = (chip: string) => {
     const next = new Set(compounds)
@@ -482,6 +523,7 @@ function DevTypeEditor({
   }
 
   return (
+    <>
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
       <SheetContent className="flex w-[560px] flex-col p-0 sm:max-w-[560px]">
         <div className="border-b border-border px-6 py-4 shrink-0">
@@ -492,6 +534,14 @@ function DevTypeEditor({
         </div>
 
         <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
+          {initial && (
+            <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-4 py-2.5 text-xs">
+              <Layers className="h-3.5 w-3.5 text-muted-foreground" />
+              <span>
+                Currently linked: <strong className={initial.availableUnits === 0 ? "text-muted-foreground" : "text-emerald-600"}>{initial.availableUnits}</strong> available / <strong>{initial.totalUnits}</strong> total units. Saving changes may update these units&apos; titles.
+              </span>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-foreground">Name (English) <span className="text-red-500">*</span></label>
@@ -568,16 +618,59 @@ function DevTypeEditor({
 
         <div className="flex items-center justify-end gap-2 border-t border-border px-6 py-4 shrink-0">
           <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
-          <Button
-            size="sm"
-            disabled={!canSave}
-            onClick={() => onSave({ nameEn: nameEn.trim(), nameAr: nameAr.trim(), developer, compounds: [...compounds], propertyTypes: [...propertyTypes], status }, initial?.id ?? null)}
-          >
+          <Button size="sm" disabled={!canSave} onClick={handleSave}>
             {initial ? "Save changes" : "Create developer type"}
           </Button>
         </div>
       </SheetContent>
     </Sheet>
+
+    {/* Edit confirmation — unit title impact */}
+    <Dialog open={!!confirm} onOpenChange={(o) => !o && setConfirm(null)}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Confirm changes</DialogTitle>
+        </DialogHeader>
+        {confirm && (() => {
+          const { added, removed, retitled } = confirm.impact
+          const none = added === 0 && removed === 0 && retitled === 0
+          return (
+            <div className="space-y-3 py-1">
+              <p className="text-sm text-muted-foreground">
+                {none ? "These changes don't affect any linked unit titles." : "Saving these changes will update the titles of the linked units:"}
+              </p>
+              {!none && (
+                <div className="space-y-2">
+                  {added > 0 && (
+                    <div className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                      <Plus className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span><strong>{added}</strong> unit{added !== 1 ? "s" : ""} will have the developer type <strong>added</strong> to {added !== 1 ? "their" : "its"} title.</span>
+                    </div>
+                  )}
+                  {removed > 0 && (
+                    <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                      <Minus className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span><strong>{removed}</strong> unit{removed !== 1 ? "s" : ""} will have the developer type <strong>removed</strong> from {removed !== 1 ? "their" : "its"} title.</span>
+                    </div>
+                  )}
+                  {retitled > 0 && (
+                    <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                      <Pencil className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span><strong>{retitled}</strong> unit{retitled !== 1 ? "s" : ""} will have {retitled !== 1 ? "their titles" : "its title"} <strong>updated</strong> to the new name “{confirm.form.nameEn}”.</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })()}
+        <DialogFooter className="gap-2">
+          <Button variant="outline" size="sm" onClick={() => setConfirm(null)}>Cancel</Button>
+          <Button size="sm" onClick={() => { if (confirm) onSave(confirm.form, initial?.id ?? null); setConfirm(null) }}>Confirm &amp; save</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   )
 }
 
