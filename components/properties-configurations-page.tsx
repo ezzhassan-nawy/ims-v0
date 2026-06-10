@@ -657,14 +657,35 @@ function ViewDrawer({ devType, onClose, onEdit, onDelete }: { devType: DevType |
 }
 
 // ── Bulk edit mapping dialog ─────────────────────────────────────────────────────
+// Compact list of the developer types a bulk change will apply to
+function AffectedTypesList({ targets }: { targets: DevType[] }) {
+  return (
+    <div className="max-h-44 space-y-1.5 overflow-y-auto rounded-lg border border-border">
+      {targets.map((t) => (
+        <div key={t.id} className="flex items-center justify-between gap-3 border-b border-border px-3 py-2 last:border-b-0">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="truncate text-sm font-medium text-foreground">{t.nameEn}</span>
+            <span className="font-mono text-[10px] text-muted-foreground">{t.id}</span>
+          </div>
+          <span className="shrink-0 text-[11px] text-muted-foreground">{t.propertyTypes.length} property type{t.propertyTypes.length !== 1 ? "s" : ""}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // Bulk edit mapping — property types only
-function BulkMappingDialog({ open, count, onClose, onApply }: { open: boolean; count: number; onClose: () => void; onApply: (action: "add" | "remove", values: string[]) => void }) {
-  const [action, setAction] = useState<"add" | "remove">("add")
+type PTAction = "add" | "remove" | "removeAll"
+function BulkMappingDialog({ open, targets, onClose, onApply }: { open: boolean; targets: DevType[]; onClose: () => void; onApply: (action: PTAction, values: string[]) => void }) {
+  const [action, setAction] = useState<PTAction>("add")
   const [propertyTypes, setPropertyTypes] = useState<Set<string>>(new Set())
+  const count = targets.length
 
   useEffect(() => {
     if (open) { setAction("add"); setPropertyTypes(new Set()) }
   }, [open])
+
+  const canApply = action === "removeAll" || propertyTypes.size > 0
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -673,33 +694,43 @@ function BulkMappingDialog({ open, count, onClose, onApply }: { open: boolean; c
           <DialogTitle className="flex items-center gap-2"><ArrowRightLeft className="h-4 w-4 text-muted-foreground" /> Bulk edit property types</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-1">
-          <div className="rounded-lg border border-border bg-muted/40 px-4 py-2.5 text-sm">Applying to <strong>{count}</strong> selected developer type{count !== 1 ? "s" : ""}.</div>
+          <div>
+            <p className="mb-1.5 text-xs font-medium text-foreground">Applying to {count} selected developer type{count !== 1 ? "s" : ""}</p>
+            <AffectedTypesList targets={targets} />
+          </div>
 
           <div className="space-y-1.5">
             <label className="text-xs font-medium">Action</label>
-            <Select value={action} onValueChange={(v) => setAction(v as "add" | "remove")}>
+            <Select value={action} onValueChange={(v) => setAction(v as PTAction)}>
               <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="add">Add property types</SelectItem>
                 <SelectItem value="remove">Remove property types</SelectItem>
+                <SelectItem value="removeAll">Remove all property types</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium">Property types to {action === "add" ? "add" : "remove"}</label>
-            <MultiSelect label="Select property types" options={PROPERTY_TYPES} selected={propertyTypes} onChange={setPropertyTypes} triggerClassName="w-full" />
-            {propertyTypes.size > 0 && (
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {[...propertyTypes].map((p) => <span key={p} className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-xs text-primary">{p}</span>)}
-              </div>
-            )}
-          </div>
+          {action === "removeAll" ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+              This will clear <strong>all</strong> property types from the {count} selected developer type{count !== 1 ? "s" : ""}.
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">Property types to {action === "add" ? "add" : "remove"}</label>
+              <MultiSelect label="Select property types" options={PROPERTY_TYPES} selected={propertyTypes} onChange={setPropertyTypes} triggerClassName="w-full" />
+              {propertyTypes.size > 0 && (
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {[...propertyTypes].map((p) => <span key={p} className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-xs text-primary">{p}</span>)}
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <DialogFooter className="gap-2">
           <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
-          <Button size="sm" disabled={propertyTypes.size === 0} onClick={() => onApply(action, [...propertyTypes])}>
-            {action === "add" ? "Add" : "Remove"} {propertyTypes.size > 0 ? `${propertyTypes.size} ` : ""}property type{propertyTypes.size !== 1 ? "s" : ""}
+          <Button size="sm" disabled={!canApply} onClick={() => onApply(action, [...propertyTypes])}>
+            {action === "removeAll" ? "Remove all" : action === "add" ? `Add ${propertyTypes.size || ""} property type${propertyTypes.size !== 1 ? "s" : ""}` : `Remove ${propertyTypes.size || ""} property type${propertyTypes.size !== 1 ? "s" : ""}`}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -861,11 +892,12 @@ function DeveloperTypesTab() {
     setViewTarget(null)
   }
 
-  const applyBulkPropertyTypes = (action: "add" | "remove", values: string[]) => {
+  const applyBulkPropertyTypes = (action: PTAction, values: string[]) => {
     const now = new Date(BASE_TS).toISOString()
     setRows((prev) =>
       prev.map((r) => {
         if (!selected.has(r.id)) return r
+        if (action === "removeAll") return { ...r, propertyTypes: [], updatedAt: now }
         const cur = new Set(r.propertyTypes)
         if (action === "add") values.forEach((v) => cur.add(v))
         else values.forEach((v) => cur.delete(v))
@@ -1067,7 +1099,7 @@ function DeveloperTypesTab() {
         onEdit={(d) => { setViewTarget(null); setEditor({ initial: d }) }}
         onDelete={(d) => setDeleteTargets([d])}
       />
-      <BulkMappingDialog open={showBulkMapping} count={selected.size} onClose={() => setShowBulkMapping(false)} onApply={applyBulkPropertyTypes} />
+      <BulkMappingDialog open={showBulkMapping} targets={selectedRows} onClose={() => setShowBulkMapping(false)} onApply={applyBulkPropertyTypes} />
       <ChangeStatusDialog targets={statusTargets} onClose={() => setStatusTargets(null)} onConfirm={applyStatusChange} />
       <DeleteDialog targets={deleteTargets} onClose={() => setDeleteTargets(null)} onConfirm={() => deleteTargets && performDelete(deleteTargets.map((t) => t.id))} />
     </div>
