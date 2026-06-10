@@ -31,6 +31,7 @@ import {
   Home,
   Info,
   Layers,
+  Loader2,
   MapPin,
   MoveRight,
   MoreVertical,
@@ -43,7 +44,7 @@ import {
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
@@ -830,17 +831,23 @@ function simulateDuplicates(unitCodes: string[], destProjectId: string): string[
 interface DestSelectorProps {
   value: { devId: string; projectId: string; phaseId: string }
   onChange: (v: { devId: string; projectId: string; phaseId: string }) => void
+  lockedDevName: string
+  excludeProjectId: string
+  excludeProjectName: string
 }
-function DestSelector({ value, onChange }: DestSelectorProps) {
-  const projects = value.devId ? (DEST_PROJECTS[value.devId] ?? []) : []
+function DestSelector({ value, onChange, lockedDevName, excludeProjectId, excludeProjectName }: DestSelectorProps) {
+  // Developer is locked to the source developer — units cannot move to a compound under a different developer.
+  // The source project is excluded so the destination can never equal the source.
+  const projects = (value.devId ? (DEST_PROJECTS[value.devId] ?? []) : [])
+    .filter(p => p.id !== excludeProjectId && p.name !== excludeProjectName)
   const phases = projects.find(p => p.id === value.projectId)?.phases ?? []
   return (
     <div className="grid grid-cols-3 gap-2">
       <div className="space-y-1">
-        <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Developer</label>
-        <Select value={value.devId} onValueChange={v => onChange({ devId: v, projectId: "", phaseId: "none" })}>
+        <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Developer <span className="normal-case font-normal">(locked)</span></label>
+        <Select value={value.devId} disabled>
           <SelectTrigger className="h-8 text-xs">
-            <SelectValue placeholder="Select…" />
+            <SelectValue>{lockedDevName}</SelectValue>
           </SelectTrigger>
           <SelectContent>
             {DEST_DEVELOPERS.map(d => <SelectItem key={d.id} value={d.id} className="text-xs">{d.name}</SelectItem>)}
@@ -854,7 +861,9 @@ function DestSelector({ value, onChange }: DestSelectorProps) {
             <SelectValue placeholder={value.devId ? "Select…" : "— pick dev first"} />
           </SelectTrigger>
           <SelectContent>
-            {projects.map(p => <SelectItem key={p.id} value={p.id} className="text-xs">{p.name}</SelectItem>)}
+            {projects.length === 0
+              ? <div className="px-2 py-1.5 text-xs text-muted-foreground">No other project under this developer</div>
+              : projects.map(p => <SelectItem key={p.id} value={p.id} className="text-xs">{p.name}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
@@ -920,11 +929,21 @@ function ChangeProjectModal({ open, onClose, selectedGroups, onConfirm }: Change
 
   type DestState = { devId: string; projectId: string; phaseId: string }
   const [destinations, setDestinations] = useState<Record<string, DestState>>({})
-  const [step, setStep] = useState<"select" | "review" | "done">("select")
+  const [step, setStep] = useState<"select" | "review" | "loading" | "done">("select")
   const [conflictMap, setConflictMap] = useState<Record<string, string[]>>({}) // key → duplicate codes
 
   React.useEffect(() => {
-    if (open) { setStep("select"); setDestinations({}); setConflictMap({}) }
+    if (open) {
+      setStep("select")
+      // Pre-select (and lock) each destination developer to its source developer.
+      // Note: depend only on `open` — compoundGroups is a fresh array each render, so
+      // including it here would re-fire the effect every render and cause an update loop.
+      const init: Record<string, DestState> = {}
+      for (const cg of compoundGroups) init[cg.key] = { devId: cg.devId, projectId: "", phaseId: "none" }
+      setDestinations(init)
+      setConflictMap({})
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
   const setDest = (key: string, v: DestState) => setDestinations(prev => ({ ...prev, [key]: v }))
@@ -957,8 +976,11 @@ function ChangeProjectModal({ open, onClose, selectedGroups, onConfirm }: Change
         phaseId: d.phaseId !== "none" ? d.phaseId : null,
       }
     })
-    onConfirm(moves)
-    setStep("done")
+    setStep("loading")
+    setTimeout(() => {
+      onConfirm(moves)
+      setStep("done")
+    }, 1500)
   }
 
   const totalGroupsMoved = eligible.length
@@ -968,6 +990,8 @@ function ChangeProjectModal({ open, onClose, selectedGroups, onConfirm }: Change
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
       <DialogContent className="!max-w-5xl w-[95vw] sm:!max-w-5xl p-0 gap-0 flex flex-col" style={{ maxHeight: "92vh", height: "92vh" }}>
+        <DialogTitle className="sr-only">Change Project</DialogTitle>
+        <DialogDescription className="sr-only">Move selected Primary and Launch properties to a different project.</DialogDescription>
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
           <div className="flex items-center gap-2.5">
@@ -984,9 +1008,7 @@ function ChangeProjectModal({ open, onClose, selectedGroups, onConfirm }: Change
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <span className={cn("font-medium", step === "select" ? "text-foreground" : "")}>1 Select</span>
             <ChevronRight className="h-3 w-3" />
-            <span className={cn("font-medium", step === "review" ? "text-foreground" : "")}>2 Review</span>
-            <ChevronRight className="h-3 w-3" />
-            <span className={cn("font-medium", step === "done" ? "text-foreground" : "")}>3 Confirm</span>
+            <span className={cn("font-medium", step !== "select" ? "text-foreground" : "")}>2 Review</span>
           </div>
         </div>
 
@@ -1029,7 +1051,7 @@ function ChangeProjectModal({ open, onClose, selectedGroups, onConfirm }: Change
                   <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
                   <div className="space-y-0.5">
                     <p className="text-sm font-medium text-amber-800">
-                      {ineligible.length} group{ineligible.length !== 1 ? "s" : ""} will be ignored
+                      {ineligible.length} {ineligible.length !== 1 ? "properties" : "property"} will be ignored
                     </p>
                     <p className="text-xs text-amber-700">
                       Resale, Nawy Now, and Rental properties cannot be moved to a different project. Only Primary and Launch units will be transferred.
@@ -1050,8 +1072,13 @@ function ChangeProjectModal({ open, onClose, selectedGroups, onConfirm }: Change
                   </p>
 
                   {compoundGroups.map(cg => {
-                    const totalDetails = cg.groups.reduce((s, g) => s + g.details.length, 0)
-                    const availableDetails = cg.groups.reduce((s, g) => s + g.details.filter(d => d.status === "Available").length, 0)
+                    // Manual groups don't expose a reliable detailed-unit count — show availability only.
+                    // Automatic groups show the unit counts as-is.
+                    const autoGroups = cg.groups.filter(g => g.entryType === "Automatic")
+                    const manualGroups = cg.groups.filter(g => g.entryType === "Manual")
+                    const autoDetails = autoGroups.reduce((s, g) => s + g.details.length, 0)
+                    const autoAvailable = autoGroups.reduce((s, g) => s + g.details.filter(d => d.status === "Available").length, 0)
+                    const manualAvailable = manualGroups.filter(g => g.availableUnits > 0).length
                     const dest = destinations[cg.key] ?? { devId: "", projectId: "", phaseId: "none" }
 
                     return (
@@ -1072,9 +1099,20 @@ function ChangeProjectModal({ open, onClose, selectedGroups, onConfirm }: Change
                           </div>
                           <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
                             <span>{cg.groups.length} grouped {cg.groups.length === 1 ? "property" : "properties"}</span>
-                            <span>·</span>
-                            <span>{totalDetails} detailed {totalDetails === 1 ? "property" : "properties"}</span>
-                            <span className="text-emerald-600 font-medium">({availableDetails} available)</span>
+                            {autoGroups.length > 0 && (
+                              <>
+                                <span>·</span>
+                                <span>{autoDetails} detailed {autoDetails === 1 ? "property" : "properties"}</span>
+                                <span className="text-emerald-600 font-medium">({autoAvailable} available)</span>
+                              </>
+                            )}
+                            {manualGroups.length > 0 && (
+                              <>
+                                <span>·</span>
+                                <span>{manualGroups.length} manual</span>
+                                <span className="text-emerald-600 font-medium">({manualAvailable} available)</span>
+                              </>
+                            )}
                           </div>
                         </div>
 
@@ -1083,6 +1121,8 @@ function ChangeProjectModal({ open, onClose, selectedGroups, onConfirm }: Change
                           {cg.groups.map(g => {
                             const avail = g.details.filter(d => d.status === "Available").length
                             const total = g.details.length
+                            const isManual = g.entryType === "Manual"
+                            const isAvailable = g.availableUnits > 0
                             return (
                               <div key={g.id} className="flex items-center justify-between px-5 py-2.5">
                                 <div className="flex items-center gap-3 min-w-0">
@@ -1093,10 +1133,19 @@ function ChangeProjectModal({ open, onClose, selectedGroups, onConfirm }: Change
                                   <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0 font-medium", badgeClass[g.saleType])}>
                                     {g.saleType}
                                   </Badge>
-                                  <span className="text-xs text-muted-foreground whitespace-nowrap">
-                                    <span className="font-medium text-emerald-600">{avail} available</span>
-                                    <span> / {total} total</span>
-                                  </span>
+                                  <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0 font-medium", badgeClass[g.entryType])}>
+                                    {g.entryType}
+                                  </Badge>
+                                  {isManual ? (
+                                    <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0 font-medium", isAvailable ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-gray-200 bg-gray-50 text-gray-600")}>
+                                      {isAvailable ? "Available" : "Not available"}
+                                    </Badge>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                      <span className="font-medium text-emerald-600">{avail} available</span>
+                                      <span> / {total} total</span>
+                                    </span>
+                                  )}
                                 </div>
                               </div>
                             )
@@ -1111,6 +1160,9 @@ function ChangeProjectModal({ open, onClose, selectedGroups, onConfirm }: Change
                           <DestSelector
                             value={dest}
                             onChange={v => setDest(cg.key, v)}
+                            lockedDevName={cg.devName}
+                            excludeProjectId={cg.projectId}
+                            excludeProjectName={cg.projectName}
                           />
                         </div>
                       </div>
@@ -1154,7 +1206,11 @@ function ChangeProjectModal({ open, onClose, selectedGroups, onConfirm }: Change
                   const destProj = (DEST_PROJECTS[dest.devId] ?? []).find(p => p.id === dest.projectId)
                   const destPhaseObj = dest.phaseId !== "none" ? (destProj?.phases ?? []).find(ph => ph.id === dest.phaseId) : null
                   const dupes = conflictMap[cg.key] ?? []
-                  const totalDetails = cg.groups.reduce((s, g) => s + g.details.length, 0)
+                  const allUnits = cg.groups.flatMap(g => g.details)
+                  const totalDetails = allUnits.length
+                  const availUnits = allUnits.filter(d => d.status === "Available").length
+                  const dupeSet = new Set(dupes)
+                  const dupeAvail = allUnits.filter(d => dupeSet.has(d.unitCode) && d.status === "Available").length
 
                   return (
                     <div key={cg.key} className="rounded-xl border border-border bg-card overflow-hidden">
@@ -1181,6 +1237,23 @@ function ChangeProjectModal({ open, onClose, selectedGroups, onConfirm }: Change
                         </p>
                       </div>
 
+                      {/* Transfer stats: how many unit IDs move, and how many duplicate */}
+                      <div className="flex items-center gap-5 px-5 py-3 border-b border-border bg-muted/20">
+                        <div className="flex flex-col">
+                          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Unit IDs transferring</span>
+                          <span className="text-sm font-semibold text-foreground">
+                            {totalDetails} total <span className="font-medium text-emerald-600">({availUnits} available)</span>
+                          </span>
+                        </div>
+                        <div className="w-px h-8 bg-border" />
+                        <div className="flex flex-col">
+                          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Duplicate unit IDs</span>
+                          <span className={cn("text-sm font-semibold", dupes.length > 0 ? "text-amber-700" : "text-emerald-700")}>
+                            {dupes.length} of {totalDetails} <span className="font-medium text-emerald-600">({dupeAvail} available)</span>
+                          </span>
+                        </div>
+                      </div>
+
                       {/* Conflict info or clear */}
                       <div className="px-5 py-3">
                         {dupes.length > 0 ? (
@@ -1189,7 +1262,7 @@ function ChangeProjectModal({ open, onClose, selectedGroups, onConfirm }: Change
                               <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
                               <div>
                                 <p className="text-sm font-medium text-amber-800">
-                                  {dupes.length} unit code{dupes.length !== 1 ? "s" : ""} already exist in <strong>{destProj?.name}</strong>
+                                  {dupes.length} unit code{dupes.length !== 1 ? "s" : ""} ({dupeAvail} available) already exist in <strong>{destProj?.name}</strong>
                                 </p>
                                 <p className="text-xs text-amber-700 mt-0.5">
                                   These units will be <strong>merged</strong> — the most recently updated record will be preserved and the older duplicate removed automatically.
@@ -1226,7 +1299,22 @@ function ChangeProjectModal({ open, onClose, selectedGroups, onConfirm }: Change
             </div>
           )}
 
-          {/* ── STEP 3: DONE ── */}
+          {/* ── TRANSFERRING (loading) ── */}
+          {step === "loading" && (
+            <div className="p-10 text-center space-y-4">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-muted border-2 border-border">
+                <Loader2 className="h-8 w-8 text-muted-foreground animate-spin" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-base font-semibold">Transferring units…</p>
+                <p className="text-sm text-muted-foreground">
+                  Moving {totalDetailsMoved} unit{totalDetailsMoved !== 1 ? "s" : ""} across {compoundGroups.length} compound{compoundGroups.length !== 1 ? "s" : ""}. Please wait.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* ── CONFIRMATION (done) ── */}
           {step === "done" && (
             <div className="p-10 text-center space-y-4">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50 border-2 border-emerald-200">
@@ -1283,6 +1371,12 @@ function ChangeProjectModal({ open, onClose, selectedGroups, onConfirm }: Change
                   Confirm transfer
                 </Button>
               </>
+            )}
+            {step === "loading" && (
+              <Button size="sm" disabled>
+                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                Transferring…
+              </Button>
             )}
             {step === "done" && (
               <Button size="sm" onClick={onClose}>Done</Button>

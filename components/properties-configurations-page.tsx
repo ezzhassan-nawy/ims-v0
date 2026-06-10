@@ -91,7 +91,6 @@ interface DevType {
   id: string
   nameEn: string
   nameAr: string
-  description: string
   developer: string // single developer
   compounds: string[] // selected leaves (phases, or phaseless main names)
   propertyTypes: string[]
@@ -103,73 +102,67 @@ interface DevType {
 }
 
 // Fields managed by the create/edit form (units are derived from linked properties)
-type DevTypeForm = Pick<DevType, "nameEn" | "nameAr" | "description" | "developer" | "compounds" | "propertyTypes" | "status">
+type DevTypeForm = Pick<DevType, "nameEn" | "nameAr" | "developer" | "compounds" | "propertyTypes" | "status">
 
 const BASE_TS = new Date("2026-05-18T13:00:00Z").getTime()
 
 const SEED: Omit<DevType, "id" | "createdAt" | "updatedAt">[] = [
   {
-    nameEn: "Premium Residential",
-    nameAr: "سكني فاخر",
-    description: "High-end residential gated communities and standalone villas.",
-    developer: "Palm Hills",
-    compounds: ["Palm Hills October — Phase 1", "Palm Hills October — Phase 2"],
-    propertyTypes: ["Villa", "Townhouse", "Penthouse", "Apartment"],
+    nameEn: "iVilla",
+    nameAr: "آي فيلا",
+    developer: "SODIC",
+    compounds: ["SODIC West — Villette", "SODIC West — Eastown"],
+    propertyTypes: ["Villa", "Townhouse"],
     availableUnits: 128,
     totalUnits: 340,
     status: "Active",
   },
   {
-    nameEn: "Coastal / Resort",
-    nameAr: "ساحلي / منتجع",
-    description: "Seasonal beachfront and North Coast resort developments.",
-    developer: "Emaar Misr",
-    compounds: ["Marassi — Phase 1", "Marassi — Phase 2", "Marassi — Phase 3", "North Bay — Phase 1"],
-    propertyTypes: ["Chalet", "Villa", "Studio"],
+    nameEn: "Svilla",
+    nameAr: "إس فيلا",
+    developer: "SODIC",
+    compounds: ["SODIC West — Villette"],
+    propertyTypes: ["Villa", "Penthouse"],
     availableUnits: 76,
     totalUnits: 210,
     status: "Active",
   },
   {
-    nameEn: "Mid-Market Residential",
-    nameAr: "سكني متوسط",
-    description: "Affordable-to-mid range apartments and duplexes.",
-    developer: "Tatweer Misr",
-    compounds: ["Bloomfields", "Villette"],
-    propertyTypes: ["Apartment", "Duplex", "Studio"],
+    nameEn: "S - Loft",
+    nameAr: "إس لوفت",
+    developer: "Palm Hills",
+    compounds: ["Palm Hills October — Phase 1", "Palm Hills October — Phase 2"],
+    propertyTypes: ["Apartment", "Studio", "Duplex"],
     availableUnits: 240,
     totalUnits: 512,
     status: "Active",
   },
   {
-    nameEn: "Commercial Developer",
-    nameAr: "مطور تجاري",
-    description: "Office, retail and clinic spaces in mixed-use districts.",
-    developer: "SODIC",
-    compounds: ["SODIC West — Villette", "SODIC West — Eastown"],
-    propertyTypes: ["Office", "Retail", "Clinic"],
+    nameEn: "Premium Condos",
+    nameAr: "شقق بريميوم",
+    developer: "Emaar Misr",
+    compounds: ["Marassi — Phase 1", "Marassi — Phase 2", "Marassi — Phase 3"],
+    propertyTypes: ["Apartment", "Penthouse"],
     availableUnits: 34,
     totalUnits: 96,
     status: "Active",
   },
   {
-    nameEn: "Mixed-Use Developer",
-    nameAr: "متعدد الاستخدامات",
-    description: "Integrated developments combining residential and commercial.",
+    nameEn: "Luxury Apartment",
+    nameAr: "شقة فاخرة",
     developer: "Mountain View",
     compounds: ["Mountain View iCity — District 1", "Mountain View iCity — District 2"],
-    propertyTypes: ["Apartment", "Office", "Retail", "Townhouse"],
+    propertyTypes: ["Apartment", "Townhouse"],
     availableUnits: 0,
     totalUnits: 148,
     status: "Inactive",
   },
   {
-    nameEn: "Economy Housing",
-    nameAr: "إسكان اقتصادي",
-    description: "Budget housing units and compact studios.",
+    nameEn: "Garden Villas",
+    nameAr: "فيلات الحديقة",
     developer: "Hassan Allam",
     compounds: ["Hacienda Bay"],
-    propertyTypes: ["Studio", "Apartment"],
+    propertyTypes: ["Villa", "Townhouse"],
     availableUnits: 18,
     totalUnits: 60,
     status: "Inactive",
@@ -459,7 +452,6 @@ function DevTypeEditor({
 }) {
   const [nameEn, setNameEn] = useState("")
   const [nameAr, setNameAr] = useState("")
-  const [description, setDescription] = useState("")
   const [developer, setDeveloper] = useState("")
   const [compounds, setCompounds] = useState<Set<string>>(new Set())
   const [propertyTypes, setPropertyTypes] = useState<Set<string>>(new Set())
@@ -469,7 +461,6 @@ function DevTypeEditor({
     if (open) {
       setNameEn(initial?.nameEn ?? "")
       setNameAr(initial?.nameAr ?? "")
-      setDescription(initial?.description ?? "")
       setDeveloper(initial?.developer ?? "")
       setCompounds(new Set(initial?.compounds ?? []))
       setPropertyTypes(new Set(initial?.propertyTypes ?? []))
@@ -518,11 +509,6 @@ function DevTypeEditor({
               <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select developer…" /></SelectTrigger>
               <SelectContent>{DEVELOPERS.map((d) => <SelectItem key={d} value={d} className="text-sm">{d}</SelectItem>)}</SelectContent>
             </Select>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-foreground">Description</label>
-            <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Short description of this developer type" className="h-9 text-sm" />
           </div>
 
           <Separator />
@@ -585,7 +571,7 @@ function DevTypeEditor({
           <Button
             size="sm"
             disabled={!canSave}
-            onClick={() => onSave({ nameEn: nameEn.trim(), nameAr: nameAr.trim(), description: description.trim(), developer, compounds: [...compounds], propertyTypes: [...propertyTypes], status }, initial?.id ?? null)}
+            onClick={() => onSave({ nameEn: nameEn.trim(), nameAr: nameAr.trim(), developer, compounds: [...compounds], propertyTypes: [...propertyTypes], status }, initial?.id ?? null)}
           >
             {initial ? "Save changes" : "Create developer type"}
           </Button>
@@ -620,8 +606,6 @@ function ViewDrawer({ devType, onClose, onEdit, onDelete }: { devType: DevType |
         </div>
 
         <div className="flex-1 space-y-6 overflow-y-auto px-6 py-5">
-          {devType.description && <Section label="Description"><p className="text-sm leading-relaxed text-foreground">{devType.description}</p></Section>}
-          <Separator />
           <div className="grid grid-cols-2 gap-x-6 gap-y-3">
             <Section label="Developer">
               <p className="flex items-center gap-1.5 text-sm"><Building2 className="h-3.5 w-3.5 text-muted-foreground" />{devType.developer}</p>
@@ -673,101 +657,115 @@ function ViewDrawer({ devType, onClose, onEdit, onDelete }: { devType: DevType |
 }
 
 // ── Bulk edit mapping dialog ─────────────────────────────────────────────────────
-type BulkField = "developer" | "compounds" | "propertyTypes"
-function BulkMappingDialog({ open, count, onClose, onApply }: { open: boolean; count: number; onClose: () => void; onApply: (field: BulkField, action: "add" | "remove", values: string[]) => void }) {
-  const [field, setField] = useState<BulkField>("developer")
+// Bulk edit mapping — property types only
+function BulkMappingDialog({ open, count, onClose, onApply }: { open: boolean; count: number; onClose: () => void; onApply: (action: "add" | "remove", values: string[]) => void }) {
   const [action, setAction] = useState<"add" | "remove">("add")
-  const [developer, setDeveloper] = useState("")
-  const [compounds, setCompounds] = useState<Set<string>>(new Set())
   const [propertyTypes, setPropertyTypes] = useState<Set<string>>(new Set())
 
   useEffect(() => {
-    if (open) { setField("developer"); setAction("add"); setDeveloper(""); setCompounds(new Set()); setPropertyTypes(new Set()) }
+    if (open) { setAction("add"); setPropertyTypes(new Set()) }
   }, [open])
-
-  const canApply = field === "developer" ? developer.length > 0 : field === "compounds" ? compounds.size > 0 : propertyTypes.size > 0
-
-  const apply = () => {
-    if (field === "developer") onApply("developer", "add", [developer])
-    else if (field === "compounds") onApply("compounds", action, [...compounds])
-    else onApply("propertyTypes", action, [...propertyTypes])
-  }
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><ArrowRightLeft className="h-4 w-4 text-muted-foreground" /> Bulk edit mapping</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><ArrowRightLeft className="h-4 w-4 text-muted-foreground" /> Bulk edit property types</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-1">
           <div className="rounded-lg border border-border bg-muted/40 px-4 py-2.5 text-sm">Applying to <strong>{count}</strong> selected developer type{count !== 1 ? "s" : ""}.</div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium">Field</label>
-              <Select value={field} onValueChange={(v) => setField(v as BulkField)}>
-                <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="developer">Developer</SelectItem>
-                  <SelectItem value="compounds">Compounds</SelectItem>
-                  <SelectItem value="propertyTypes">Property Types</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium">Action</label>
-              {field === "developer" ? (
-                <div className="flex h-8 items-center rounded-md border border-border bg-muted/40 px-3 text-xs text-muted-foreground">Set developer to</div>
-              ) : (
-                <Select value={action} onValueChange={(v) => setAction(v as "add" | "remove")}>
-                  <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="add">Add to mapping</SelectItem>
-                    <SelectItem value="remove">Remove from mapping</SelectItem>
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium">Action</label>
+            <Select value={action} onValueChange={(v) => setAction(v as "add" | "remove")}>
+              <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="add">Add property types</SelectItem>
+                <SelectItem value="remove">Remove property types</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-1.5">
-            {field === "developer" && (
-              <>
-                <label className="text-xs font-medium">Developer</label>
-                <Select value={developer} onValueChange={setDeveloper}>
-                  <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select developer…" /></SelectTrigger>
-                  <SelectContent>{DEVELOPERS.map((d) => <SelectItem key={d} value={d} className="text-sm">{d}</SelectItem>)}</SelectContent>
-                </Select>
-                <p className="text-[11px] text-muted-foreground">Each developer type is linked to exactly one developer; this replaces it on all selected.</p>
-              </>
-            )}
-            {field === "compounds" && (
-              <>
-                <label className="text-xs font-medium">Compounds to {action === "add" ? "add" : "remove"}</label>
-                <NestedCompoundSelect selected={compounds} onChange={setCompounds} triggerClassName="w-full" />
-                {compounds.size > 0 && (
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {summarizeCompounds([...compounds]).map((c) => <span key={c} className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-xs text-primary">{c}</span>)}
-                  </div>
-                )}
-              </>
-            )}
-            {field === "propertyTypes" && (
-              <>
-                <label className="text-xs font-medium">Property types to {action === "add" ? "add" : "remove"}</label>
-                <MultiSelect label="Select property types" options={PROPERTY_TYPES} selected={propertyTypes} onChange={setPropertyTypes} triggerClassName="w-full" />
-                {propertyTypes.size > 0 && (
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {[...propertyTypes].map((p) => <span key={p} className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-xs text-primary">{p}</span>)}
-                  </div>
-                )}
-              </>
+            <label className="text-xs font-medium">Property types to {action === "add" ? "add" : "remove"}</label>
+            <MultiSelect label="Select property types" options={PROPERTY_TYPES} selected={propertyTypes} onChange={setPropertyTypes} triggerClassName="w-full" />
+            {propertyTypes.size > 0 && (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {[...propertyTypes].map((p) => <span key={p} className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-xs text-primary">{p}</span>)}
+              </div>
             )}
           </div>
         </div>
         <DialogFooter className="gap-2">
           <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
-          <Button size="sm" disabled={!canApply} onClick={apply}>Apply</Button>
+          <Button size="sm" disabled={propertyTypes.size === 0} onClick={() => onApply(action, [...propertyTypes])}>
+            {action === "add" ? "Add" : "Remove"} {propertyTypes.size > 0 ? `${propertyTypes.size} ` : ""}property type{propertyTypes.size !== 1 ? "s" : ""}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// Shared list of affected dev types with their unit counts (used by status-change & delete)
+function AffectedUnitsList({ targets }: { targets: DevType[] }) {
+  return (
+    <div className="max-h-56 space-y-1.5 overflow-y-auto rounded-lg border border-border">
+      {targets.map((t) => (
+        <div key={t.id} className="flex items-center justify-between gap-3 border-b border-border px-3 py-2 last:border-b-0">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium text-foreground">{t.nameEn}</p>
+            <p className="font-mono text-[10px] text-muted-foreground">{t.id}</p>
+          </div>
+          <span className="shrink-0 text-xs tabular-nums">
+            <span className={cn("font-semibold", t.availableUnits === 0 ? "text-muted-foreground" : "text-emerald-600")}>{t.availableUnits}</span>
+            <span className="text-muted-foreground"> / {t.totalUnits} units</span>
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// Bulk change status
+function ChangeStatusDialog({ targets, onClose, onConfirm }: { targets: DevType[] | null; onClose: () => void; onConfirm: (status: DevTypeStatus) => void }) {
+  const [status, setStatus] = useState<DevTypeStatus>("Active")
+  useEffect(() => { if (targets) setStatus("Active") }, [targets])
+  if (!targets) return null
+  const count = targets.length
+  const totalUnits = targets.reduce((s, t) => s + t.totalUnits, 0)
+  const availableUnits = targets.reduce((s, t) => s + t.availableUnits, 0)
+
+  return (
+    <Dialog open={!!targets} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><ArrowRightLeft className="h-4 w-4 text-muted-foreground" /> Change status</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-1">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm">Set <strong>{count}</strong> developer type{count !== 1 ? "s" : ""} to</span>
+            <Select value={status} onValueChange={(v) => setStatus(v as DevTypeStatus)}>
+              <SelectTrigger className="h-8 w-36 text-sm"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Active">Active</SelectItem>
+                <SelectItem value="Inactive">Inactive</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <p className="mb-1.5 text-xs font-medium text-foreground">Affected developer types &amp; linked units</p>
+            <AffectedUnitsList targets={targets} />
+          </div>
+
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+            The titles of the <strong>{availableUnits}</strong> available (of <strong>{totalUnits}</strong> total) linked unit{totalUnits !== 1 ? "s" : ""} will be updated accordingly to reflect the new status.
+          </div>
+        </div>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
+          <Button size="sm" onClick={() => onConfirm(status)}>Change to {status}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -778,23 +776,22 @@ function BulkMappingDialog({ open, count, onClose, onApply }: { open: boolean; c
 function DeleteDialog({ targets, onClose, onConfirm }: { targets: DevType[] | null; onClose: () => void; onConfirm: () => void }) {
   if (!targets) return null
   const count = targets.length
-  const totalDevelopers = new Set(targets.map((t) => t.developer)).size
-  const totalCompounds = new Set(targets.flatMap((t) => t.compounds)).size
+  const totalUnits = targets.reduce((s, t) => s + t.totalUnits, 0)
+  const availableUnits = targets.reduce((s, t) => s + t.availableUnits, 0)
   return (
     <Dialog open={!!targets} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-red-600"><Trash2 className="h-4 w-4" /> Delete {count} developer type{count !== 1 ? "s" : ""}?</DialogTitle>
         </DialogHeader>
         <div className="space-y-3 py-1">
-          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-            {count === 1 ? (
-              <>Deleting <strong>{targets[0].nameEn}</strong> will unlink it from developer <strong>{targets[0].developer}</strong>, <strong>{targets[0].compounds.length}</strong> compound{targets[0].compounds.length !== 1 ? "s" : ""}, and <strong>{targets[0].propertyTypes.length}</strong> property type{targets[0].propertyTypes.length !== 1 ? "s" : ""}.</>
-            ) : (
-              <>Deleting these {count} developer types will affect their mappings across <strong>{totalDevelopers}</strong> developer{totalDevelopers !== 1 ? "s" : ""} and <strong>{totalCompounds}</strong> compound{totalCompounds !== 1 ? "s" : ""}.</>
-            )}
+          <div>
+            <p className="mb-1.5 text-xs font-medium text-foreground">Affected developer types &amp; linked units</p>
+            <AffectedUnitsList targets={targets} />
           </div>
-          <p className="text-xs text-muted-foreground">This action cannot be undone.</p>
+          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-800">
+            The titles of the <strong>{availableUnits}</strong> available (of <strong>{totalUnits}</strong> total) linked unit{totalUnits !== 1 ? "s" : ""} will be updated accordingly. <strong>This action cannot be undone.</strong>
+          </div>
         </div>
         <DialogFooter className="gap-2">
           <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
@@ -818,6 +815,7 @@ function DeveloperTypesTab() {
   const [editor, setEditor] = useState<{ initial: DevType | null } | null>(null)
   const [viewTarget, setViewTarget] = useState<DevType | null>(null)
   const [deleteTargets, setDeleteTargets] = useState<DevType[] | null>(null)
+  const [statusTargets, setStatusTargets] = useState<DevType[] | null>(null)
   const [showBulkMapping, setShowBulkMapping] = useState(false)
 
   const [currentPage, setCurrentPage] = useState(1)
@@ -826,7 +824,7 @@ function DeveloperTypesTab() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return rows.filter((r) => {
-      if (q && !r.nameEn.toLowerCase().includes(q) && !r.nameAr.includes(q) && !r.description.toLowerCase().includes(q) && !r.id.toLowerCase().includes(q)) return false
+      if (q && !r.nameEn.toLowerCase().includes(q) && !r.nameAr.includes(q) && !r.id.toLowerCase().includes(q)) return false
       if (developerFilter.size > 0 && !developerFilter.has(r.developer)) return false
       if (compoundFilter.size > 0 && !r.compounds.some((c) => compoundFilter.has(c))) return false
       if (propertyTypeFilter.size > 0 && !r.propertyTypes.some((p) => propertyTypeFilter.has(p))) return false
@@ -863,19 +861,24 @@ function DeveloperTypesTab() {
     setViewTarget(null)
   }
 
-  const applyBulk = (field: BulkField, action: "add" | "remove", values: string[]) => {
+  const applyBulkPropertyTypes = (action: "add" | "remove", values: string[]) => {
     const now = new Date(BASE_TS).toISOString()
     setRows((prev) =>
       prev.map((r) => {
         if (!selected.has(r.id)) return r
-        if (field === "developer") return { ...r, developer: values[0] ?? r.developer, updatedAt: now }
-        const cur = new Set(r[field])
+        const cur = new Set(r.propertyTypes)
         if (action === "add") values.forEach((v) => cur.add(v))
         else values.forEach((v) => cur.delete(v))
-        return { ...r, [field]: [...cur], updatedAt: now }
+        return { ...r, propertyTypes: [...cur], updatedAt: now }
       }),
     )
     setShowBulkMapping(false)
+  }
+
+  const applyStatusChange = (status: DevTypeStatus) => {
+    const now = new Date(BASE_TS).toISOString()
+    setRows((prev) => prev.map((r) => (selected.has(r.id) ? { ...r, status, updatedAt: now } : r)))
+    setStatusTargets(null)
   }
 
   const selectedRows = rows.filter((r) => selected.has(r.id))
@@ -949,6 +952,7 @@ function DeveloperTypesTab() {
                 <tr>
                   <th className="w-10 border-r border-border bg-muted px-3 py-2" />
                   <th className="border-r border-border bg-muted px-3 py-2 text-left text-xs font-medium text-muted-foreground">Developer Type</th>
+                  <th className="border-r border-border bg-muted px-3 py-2 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">Developer Type (AR)</th>
                   <th className="border-r border-border bg-muted px-3 py-2 text-left text-xs font-medium text-muted-foreground">Developer</th>
                   <th className="border-r border-border bg-muted px-3 py-2 text-left text-xs font-medium text-muted-foreground">Compounds</th>
                   <th className="border-r border-border bg-muted px-3 py-2 text-left text-xs font-medium text-muted-foreground">Property Types</th>
@@ -966,12 +970,10 @@ function DeveloperTypesTab() {
                     <tr key={r.id} className={cn("group border-b border-border transition-colors", isSelected ? "bg-blue-50 dark:bg-blue-950/30" : "hover:bg-muted/50")}>
                       <td className="border-r border-border px-3 py-2.5" onClick={(e) => e.stopPropagation()}><Checkbox checked={isSelected} onCheckedChange={() => toggleSelect(r.id)} /></td>
                       <td className="border-r border-border px-3 py-2.5">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-foreground">{r.nameEn}</span>
-                          <span className="text-xs text-muted-foreground" dir="rtl">{r.nameAr}</span>
-                        </div>
+                        <span className="font-medium text-foreground">{r.nameEn}</span>
                         <div className="mt-0.5"><CopyId id={r.id} /></div>
                       </td>
+                      <td className="border-r border-border px-3 py-2.5 text-sm" dir="rtl">{r.nameAr}</td>
                       <td className="border-r border-border px-3 py-2.5"><ChipList values={[r.developer]} tone="blue" /></td>
                       <td className="border-r border-border px-3 py-2.5"><ChipList values={summarizeCompounds(r.compounds)} /></td>
                       <td className="border-r border-border px-3 py-2.5"><ChipList values={r.propertyTypes} tone="violet" /></td>
@@ -1047,7 +1049,9 @@ function DeveloperTypesTab() {
             )}
           </div>
           <div className="h-8 w-px bg-zinc-700" />
-          <button onClick={() => setShowBulkMapping(true)} className="flex items-center gap-1.5 px-4 py-2.5 transition-colors hover:bg-zinc-800"><ArrowRightLeft className="h-3.5 w-3.5 text-zinc-400" /> Bulk edit mapping</button>
+          <button onClick={() => setShowBulkMapping(true)} className="flex items-center gap-1.5 px-4 py-2.5 transition-colors hover:bg-zinc-800"><Home className="h-3.5 w-3.5 text-zinc-400" /> Edit property types</button>
+          <div className="h-8 w-px bg-zinc-700" />
+          <button onClick={() => setStatusTargets(selectedRows)} className="flex items-center gap-1.5 px-4 py-2.5 transition-colors hover:bg-zinc-800"><ArrowRightLeft className="h-3.5 w-3.5 text-zinc-400" /> Change status</button>
           <div className="h-8 w-px bg-zinc-700" />
           <button onClick={() => setDeleteTargets(selectedRows)} className="flex items-center gap-1.5 px-4 py-2.5 text-red-400 transition-colors hover:bg-zinc-800 hover:text-red-300"><Trash2 className="h-3.5 w-3.5" /> Delete</button>
           <div className="h-8 w-px bg-zinc-700" />
@@ -1063,7 +1067,8 @@ function DeveloperTypesTab() {
         onEdit={(d) => { setViewTarget(null); setEditor({ initial: d }) }}
         onDelete={(d) => setDeleteTargets([d])}
       />
-      <BulkMappingDialog open={showBulkMapping} count={selected.size} onClose={() => setShowBulkMapping(false)} onApply={applyBulk} />
+      <BulkMappingDialog open={showBulkMapping} count={selected.size} onClose={() => setShowBulkMapping(false)} onApply={applyBulkPropertyTypes} />
+      <ChangeStatusDialog targets={statusTargets} onClose={() => setStatusTargets(null)} onConfirm={applyStatusChange} />
       <DeleteDialog targets={deleteTargets} onClose={() => setDeleteTargets(null)} onConfirm={() => deleteTargets && performDelete(deleteTargets.map((t) => t.id))} />
     </div>
   )
