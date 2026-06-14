@@ -1224,11 +1224,12 @@ interface PlanCardData {
     conditions?: { andGroups: Array<Array<{ op: "IF" | "OR"; field: string; operator: string; values: string[] }>> }
   }
 }
-interface PriceGroup { price: number; plans: PlanCardData[] }
+interface PriceGroup { price: number; priceUpdatedAt?: string; plans: PlanCardData[] }
 
 const PAYMENT_PLAN_GROUPS: PriceGroup[] = [
   {
     price: 3_500_000,
+    priceUpdatedAt: "18 Apr 2026, 02:15 PM",
     plans: [
       {
         id: "50680", name: "Midtown Sky — Equal 8 Years Quarterly", status: "Active", hasOffer: true,
@@ -1281,6 +1282,7 @@ const PAYMENT_PLAN_GROUPS: PriceGroup[] = [
   },
   {
     price: 5_000_000,
+    priceUpdatedAt: "02 May 2026, 09:30 AM",
     plans: [
       {
         id: "51055", name: "Solana — Equal 10 Years Quarterly", status: "Active", hasOffer: false,
@@ -1391,6 +1393,11 @@ function PriceGroup({ group, totalGroups, expandedPlans, setExpandedPlans, readO
         <span className="text-[15px] font-bold tabular-nums text-foreground whitespace-nowrap">
           {group.price.toLocaleString()} EGP
         </span>
+        {group.priceUpdatedAt && (
+          <span className="flex items-center gap-1 text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
+            <Clock className="h-2.5 w-2.5" />Price updated {group.priceUpdatedAt}
+          </span>
+        )}
         <div className="flex-1 h-px bg-border" />
         <span className="text-[11px] text-muted-foreground whitespace-nowrap flex-shrink-0">
           {group.plans.length} {group.plans.length === 1 ? "plan" : "plans"}
@@ -3564,19 +3571,23 @@ export function DetailedPropertiesView({ filters }: { filters: FilterProps }) {
                   <MoreHorizontal className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuContent align="end" className="w-48">
                 <DropdownMenuItem onClick={() => setViewDrawer({ propertyId: row.propertyId, tab: "unit-details" })}>
                   <Eye className="h-4 w-4 mr-2 text-muted-foreground" />
                   View
                 </DropdownMenuItem>
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={() => window.open(`/properties/grouped/${row.propertyId}`, "_blank", "noopener")}>
                   <Edit className="h-4 w-4 mr-2 text-muted-foreground" />
                   Edit
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-red-600 focus:text-red-600 focus:bg-red-50">
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete
+                <DropdownMenuItem onClick={() => window.open(`https://www.nawy.com/property/${row.propertyId}`, "_blank", "noopener")}>
+                  <Globe className="h-4 w-4 mr-2 text-muted-foreground" />
+                  View on Website
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => window.open(`/e-realty/properties/${row.propertyId}`, "_blank", "noopener")}>
+                  <Building2 className="h-4 w-4 mr-2 text-muted-foreground" />
+                  View on E-realty
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
